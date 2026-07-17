@@ -1,0 +1,70 @@
+{
+  "name": "@trafaelosborn/octave",
+  "version": "0.1.0",
+  "description": "A local-first toolkit for research documents, model-agnostic chat, and LaTeX compilation.",
+  "license": "MIT",
+  "author": "Taylor Osborn",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "import": "./dist/storage/index.js"
+    }
+  },
+  "bin": {
+    "octave": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build",
+    "demo": "tsx examples/library-usage.ts",
+    "prepack": "npm run check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "research",
+    "latex",
+    "local-first",
+    "llm",
+    "ollama",
+    "anthropic"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trafaelosborn/Octave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trafaelosborn/Octave/issues"
+  },
+  "homepage": "https://github.com/trafaelosborn/Octave#readme",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
