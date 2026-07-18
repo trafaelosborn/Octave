@@ -28,7 +28,12 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const existingChat = body.chatId ? await loadChat(workspace.rootPath, body.chatId) : null;
-    const chat = existingChat ?? await createChat(workspace.rootPath);
+    const newChatOptions: { scope: 'workspace' | 'document'; documentPath?: string } = {
+      scope: body.documentPath ? 'document' : 'workspace',
+    };
+    if (body.documentPath !== undefined) newChatOptions.documentPath = body.documentPath;
+    const chat = existingChat ?? await createChat(workspace.rootPath, newChatOptions);
+    const scopedDocumentPath = chat.scope === 'document' ? chat.documentPath : undefined;
     const pinnedFiles = await listPinnedPaths(workspace.rootPath);
     const encoder = new TextEncoder();
 
@@ -41,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
           provider,
           pinnedFiles,
         };
-        if (body.documentPath !== undefined) options.currentDocumentPath = body.documentPath;
+        if (scopedDocumentPath !== undefined) options.currentDocumentPath = scopedDocumentPath;
         if (body.model !== undefined) options.model = body.model;
 
         sendChatMessage(options, (delta) => {

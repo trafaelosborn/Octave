@@ -19,9 +19,13 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await readJsonBody<{ workspaceId?: string; title?: string }>(request);
+    const body = await readJsonBody<{ workspaceId?: string; title?: string; scope?: 'workspace' | 'document'; documentPath?: string }>(request);
     const workspace = await getWorkspace(body.workspaceId);
-    return Response.json({ chat: await createChat(workspace.rootPath, body.title) });
+    const options: { title?: string; scope?: 'workspace' | 'document'; documentPath?: string } = {};
+    if (body.title !== undefined) options.title = body.title;
+    if (body.scope !== undefined) options.scope = body.scope;
+    if (body.documentPath !== undefined) options.documentPath = body.documentPath;
+    return Response.json({ chat: await createChat(workspace.rootPath, options) });
   } catch (error) {
     return jsonError(error);
   }

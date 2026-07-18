@@ -6,8 +6,17 @@ describe('chat model', () => {
     const session = createNewChatSession();
     expect(session.title).toBe('New chat');
     expect(session.messages).toEqual([]);
+    expect(session.scope).toBe('workspace');
     expect(session.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(isChatSession(session)).toBe(true);
+  });
+
+  it('requires a path for document-scoped sessions', () => {
+    expect(() => createNewChatSession('Proof chat', 'document')).toThrow('document path');
+    expect(createNewChatSession('Proof chat', 'document', 'paper.tex')).toMatchObject({
+      scope: 'document',
+      documentPath: 'paper.tex',
+    });
   });
 
   it('creates a compact title from the first message', () => {

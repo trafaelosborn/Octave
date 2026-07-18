@@ -148,6 +148,7 @@ npm pack --dry-run
 
 ## Roadmap
 
+- Doris feature-convergence work is tracked in [docs/DORIS_CONVERGENCE_ROADMAP.md](docs/DORIS_CONVERGENCE_ROADMAP.md).
 - OpenAI-compatible provider support
 - Richer bibliography workflows
 - Desktop packaging

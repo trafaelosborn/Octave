@@ -31,10 +31,18 @@ export async function sendChatMessage(
 
   const existing = await loadChat(options.workspaceRoot, options.chatId);
   if (!existing) throw new Error(`Chat session not found: ${options.chatId}`);
+  if (
+    existing.scope === 'document' &&
+    options.currentDocumentPath !== undefined &&
+    options.currentDocumentPath !== existing.documentPath
+  ) {
+    throw new Error('Document chat scope cannot switch to a different document.');
+  }
+  const scopedDocumentPath = existing.scope === 'document' ? existing.documentPath : undefined;
 
   let session = await appendMessage(options.workspaceRoot, options.chatId, 'user', userContent);
-  if (options.currentDocumentPath !== undefined) {
-    session.lastDocumentPath = options.currentDocumentPath;
+  if (scopedDocumentPath !== undefined) {
+    session.lastDocumentPath = scopedDocumentPath;
     await saveChat(options.workspaceRoot, session);
   }
 
@@ -44,7 +52,7 @@ export async function sendChatMessage(
   const contextOptions: Parameters<typeof buildWorkspaceContext>[0] = {
     workspaceRoot: options.workspaceRoot,
   };
-  if (options.currentDocumentPath !== undefined) contextOptions.currentDocumentPath = options.currentDocumentPath;
+  if (scopedDocumentPath !== undefined) contextOptions.currentDocumentPath = scopedDocumentPath;
   if (options.pinnedFiles !== undefined) contextOptions.pinnedFiles = options.pinnedFiles;
   if (options.maxContextChars !== undefined) contextOptions.maxContextChars = options.maxContextChars;
 

@@ -10,6 +10,7 @@ import type {
   ChatMessage,
   ChatSession,
   ChatSessionMeta,
+  ChatScope,
   CitationScan,
   OctaveFile,
   OutlineItem,
@@ -45,6 +46,8 @@ export default function OctavePage() {
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
   const [chats, setChats] = useState<ChatSessionMeta[]>([]);
   const [activeChatId, setActiveChatId] = useState('');
+  const [chatScope, setChatScope] = useState<ChatScope>('document');
+  const [chatDocumentPath, setChatDocumentPath] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providers, setProviders] = useState<ProviderStatus[]>([
     { id: 'demo', name: 'Offline demo', available: true, local: true },
@@ -148,6 +151,7 @@ export default function OctavePage() {
     if (chat) await loadChat(chat.id, workspaceId, false);
     else {
       setActiveChatId('');
+      setChatDocumentPath('');
       setMessages([]);
     }
   }
@@ -315,12 +319,19 @@ export default function OctavePage() {
 
   async function createNewChat(): Promise<string> {
     if (!activeWorkspaceId) throw new Error('Open a workspace before starting a chat.');
+    if (chatScope === 'document' && !selectedPath) throw new Error('Open a document before starting a document chat.');
     const data = await apiJson<{ chat: ChatSession }>('/api/chats', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId: activeWorkspaceId }),
+      body: JSON.stringify({
+        workspaceId: activeWorkspaceId,
+        scope: chatScope,
+        documentPath: chatScope === 'document' ? selectedPath : undefined,
+      }),
     });
     setActiveChatId(data.chat.id);
+    setChatScope(data.chat.scope);
+    setChatDocumentPath(data.chat.documentPath ?? '');
     setMessages([]);
     window.localStorage.setItem(`octave:chat:${activeWorkspaceId}`, data.chat.id);
     await refreshChats();
@@ -338,6 +349,8 @@ export default function OctavePage() {
     const data = await apiJson<{ chat: ChatSession | null }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}&chatId=${encodeURIComponent(chatId)}`);
     if (!data.chat) throw new Error('Chat session was not found.');
     setActiveChatId(chatId);
+    setChatScope(data.chat.scope);
+    setChatDocumentPath(data.chat.documentPath ?? '');
     setMessages(data.chat.messages);
     window.localStorage.setItem(`octave:chat:${workspaceId}`, chatId);
     if (show) setWorkView('chat');
@@ -347,7 +360,9 @@ export default function OctavePage() {
     const prompt = (promptOverride ?? chatInput).trim();
     if (!prompt || chatLoading || !activeWorkspaceId) return;
 
+    const newChatDocumentPath = chatScope === 'document' ? selectedPath : '';
     const chatId = activeChatId || await createNewChat();
+    const scopedDocumentPath = activeChatId ? chatDocumentPath : newChatDocumentPath;
     const now = new Date().toISOString();
     const priorMessages = messages;
     const optimistic: ChatMessage[] = [
@@ -371,7 +386,7 @@ export default function OctavePage() {
           workspaceId: activeWorkspaceId,
           chatId,
           prompt,
-          documentPath: selectedPath || undefined,
+          documentPath: chatScope === 'document' ? (scopedDocumentPath || undefined) : undefined,
           provider: providerId,
         }),
       });
@@ -411,6 +426,18 @@ export default function OctavePage() {
       const last = current.at(-1);
       return last?.role === 'assistant' && !last.content ? current.slice(0, -1) : current;
     });
+  }
+
+  function changeChatScope(scope: ChatScope): void {
+    if (scope === 'document' && !selectedPath) {
+      showError(new Error('Open a document before starting a document chat.'));
+      return;
+    }
+    setChatScope(scope);
+    setChatDocumentPath(scope === 'document' ? selectedPath : '');
+    setActiveChatId('');
+    setMessages([]);
+    setError('');
   }
 
   async function proposeRevision(): Promise<void> {
@@ -620,10 +647,13 @@ export default function OctavePage() {
                     loading={chatLoading}
                     revising={revising}
                     selectedPath={selectedPath}
+                    scope={chatScope}
+                    documentPath={chatDocumentPath || selectedPath}
                     providerId={providerId}
                     providers={providers}
                     onInput={setChatInput}
                     onProvider={setProvider}
+                    onScope={changeChatScope}
                     onSend={() => sendChat().catch(showError)}
                     onProposeRevision={() => proposeRevision().catch(showError)}
                     onStop={stopChat}

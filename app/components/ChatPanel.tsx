@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { ChatMessage, ProviderStatus } from '../lib/client-types';
+import type { ChatMessage, ChatScope, ProviderStatus } from '../lib/client-types';
 import { Icon } from './Icon';
 import { MarkdownMessage } from './MarkdownMessage';
 
@@ -11,10 +11,13 @@ export function ChatPanel({
   loading,
   revising,
   selectedPath,
+  scope,
+  documentPath,
   providerId,
   providers,
   onInput,
   onProvider,
+  onScope,
   onSend,
   onProposeRevision,
   onStop,
@@ -24,10 +27,13 @@ export function ChatPanel({
   loading: boolean;
   revising: boolean;
   selectedPath: string;
+  scope: ChatScope;
+  documentPath: string;
   providerId: string;
   providers: ProviderStatus[];
   onInput: (value: string) => void;
   onProvider: (providerId: string) => void;
+  onScope: (scope: ChatScope) => void;
   onSend: () => void;
   onProposeRevision: () => void;
   onStop: () => void;
@@ -46,18 +52,27 @@ export function ChatPanel({
       <div className="chat-context-strip">
         <div>
           <Icon name="spark" size={15}/>
-          <span>{selectedPath ? `Reading ${selectedPath}` : 'Workspace conversation'}</span>
+          <span>{scope === 'document' ? `Document: ${documentPath || selectedPath}` : 'Project conversation'}</span>
         </div>
-        <label className="provider-picker">
-          <span className={`provider-dot ${activeProvider?.available ? 'online' : 'offline'}`} />
-          <select value={providerId} onChange={(event) => onProvider(event.target.value)} aria-label="Model provider">
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.id} disabled={!provider.available}>
-                {provider.name}{provider.available ? '' : ' (unavailable)'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="chat-controls">
+          <label className="scope-picker">
+            <span>Scope</span>
+            <select value={scope} onChange={(event) => onScope(event.target.value as ChatScope)} aria-label="Chat scope">
+              <option value="document" disabled={!selectedPath}>Document</option>
+              <option value="workspace">Project</option>
+            </select>
+          </label>
+          <label className="provider-picker">
+            <span className={`provider-dot ${activeProvider?.available ? 'online' : 'offline'}`} />
+            <select value={providerId} onChange={(event) => onProvider(event.target.value)} aria-label="Model provider">
+              {providers.map((provider) => (
+                <option key={provider.id} value={provider.id} disabled={!provider.available}>
+                  {provider.name}{provider.available ? '' : ' (unavailable)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="message-list" ref={scrollRef}>

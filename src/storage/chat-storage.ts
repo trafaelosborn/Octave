@@ -6,6 +6,7 @@ import {
   isChatSession,
   type ChatSession,
   type ChatSessionMeta,
+  type ChatScope,
 } from '../core/chat.js';
 
 const CHATS_DIRECTORY = path.join('.octave', 'chats');
@@ -68,8 +69,12 @@ export async function saveChat(workspaceRoot: string, session: ChatSession): Pro
   await fs.rename(temporary, destination);
 }
 
-export async function createChat(workspaceRoot: string, title?: string): Promise<ChatSession> {
-  const session = createNewChatSession(title);
+export async function createChat(
+  workspaceRoot: string,
+  input: string | { title?: string; scope?: ChatScope; documentPath?: string } = {},
+): Promise<ChatSession> {
+  const options = typeof input === 'string' ? { title: input } : input;
+  const session = createNewChatSession(options.title, options.scope, options.documentPath);
   await saveChat(workspaceRoot, session);
   return session;
 }
@@ -130,11 +135,19 @@ async function readSession(filePath: string): Promise<ChatSession> {
     throw new Error(`Invalid chat JSON: ${path.basename(filePath)}`);
   }
 
-  if (!isChatSession(parsed)) {
+  const candidate = migrateLegacySession(parsed);
+  if (!isChatSession(candidate)) {
     throw new Error(`Invalid chat session: ${path.basename(filePath)}`);
   }
 
-  return parsed;
+  return candidate;
+}
+
+function migrateLegacySession(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  const session = value as Record<string, unknown>;
+  if (session.scope !== undefined) return value;
+  return { ...session, scope: 'workspace' };
 }
 
 function toMetadata(session: ChatSession): ChatSessionMeta {
@@ -143,7 +156,9 @@ function toMetadata(session: ChatSession): ChatSessionMeta {
     title: session.title,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+    scope: session.scope,
   };
+  if (session.documentPath !== undefined) metadata.documentPath = session.documentPath;
   if (session.lastDocumentPath !== undefined) {
     metadata.lastDocumentPath = session.lastDocumentPath;
   }
