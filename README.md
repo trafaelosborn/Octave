@@ -11,7 +11,8 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Opens existing local folders without importing or converting them.
 - Edits TeX, BibTeX, Markdown, structured text, Python, R, JavaScript, TypeScript, and LaTeX support files.
 - Extracts read-only research context from PDF, Word, Excel, PowerPoint, OpenDocument, and RTF files with explicit limits and warnings.
-- Keeps research chats at project scope while attaching the active document and pinned files at send time.
+- Keeps durable project and document chats, with document conversations fixed to their source file.
+- Attaches up to eight supported project files to an individual message as bounded, durable extraction snapshots.
 - Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
@@ -125,7 +126,7 @@ src/
   cli.ts       command-line interface over the reusable core
 ```
 
-Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context.
+Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context. Message attachments are separate from pinned context: their extracted snapshots stay on the specific user turn that used them, capped at 25 MB of combined source data and 60,000 extracted characters.
 
 ## Privacy and safety
 

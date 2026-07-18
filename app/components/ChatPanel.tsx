@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import type { ChatMessage, ChatScope, ProviderStatus } from '../lib/client-types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChatMessage, ChatScope, OctaveFile, ProviderStatus } from '../lib/client-types';
 import { Icon } from './Icon';
 import { MarkdownMessage } from './MarkdownMessage';
 
+const MAX_CHAT_ATTACHMENTS = 8;
+
 export function ChatPanel({
   messages,
+  files,
+  attachmentPaths,
   input,
   loading,
   revising,
@@ -21,11 +25,15 @@ export function ChatPanel({
   onProvider,
   onModel,
   onScope,
+  onToggleAttachment,
+  onRemoveAttachment,
   onSend,
   onProposeRevision,
   onStop,
 }: {
   messages: ChatMessage[];
+  files: OctaveFile[];
+  attachmentPaths: string[];
   input: string;
   loading: boolean;
   revising: boolean;
@@ -40,12 +48,23 @@ export function ChatPanel({
   onProvider: (providerId: string) => void;
   onModel: (modelId: string) => void;
   onScope: (scope: ChatScope) => void;
+  onToggleAttachment: (path: string) => void;
+  onRemoveAttachment: (path: string) => void;
   onSend: () => void;
   onProposeRevision: () => void;
   onStop: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
+  const [attachmentFilter, setAttachmentFilter] = useState('');
   const activeProvider = providers.find((provider) => provider.id === providerId);
+  const visibleFiles = useMemo(() => {
+    const query = attachmentFilter.trim().toLowerCase();
+    return query ? files.filter((file) => file.path.toLowerCase().includes(query)) : files;
+  }, [attachmentFilter, files]);
+  const pendingFiles = attachmentPaths
+    .map((attachmentPath) => files.find((file) => file.path === attachmentPath))
+    .filter((file): file is OctaveFile => Boolean(file));
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -106,12 +125,72 @@ export function ChatPanel({
                   ? <MarkdownMessage content={message.content}/>
                   : <ThinkingIndicator />
                 : <p>{message.content}</p>}
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="message-attachments" aria-label="Message attachments">
+                  {message.attachments.map((attachment) => (
+                    <span className="attachment-chip" key={attachment.path} title={attachment.path}>
+                      <Icon name="file" size={13}/>
+                      <span>{attachment.name}</span>
+                      {attachment.truncated && <small>truncated</small>}
+                    </span>
+                  ))}
+                  {message.attachments.flatMap((attachment) => attachment.warnings).map((warning, warningIndex) => (
+                    <p className="attachment-warning" key={`${warning}-${warningIndex}`}>{warning}</p>
+                  ))}
+                </div>
+              )}
             </div>
           </article>
         ))}
       </div>
 
       <div className="composer-shell">
+        {attachmentPickerOpen && (
+          <div className="attachment-picker">
+            <header>
+              <div><strong>Attach project files</strong><span>{attachmentPaths.length}/{MAX_CHAT_ATTACHMENTS}</span></div>
+              <button type="button" className="button button-quiet" onClick={() => setAttachmentPickerOpen(false)}>Done</button>
+            </header>
+            <input
+              type="search"
+              value={attachmentFilter}
+              onChange={(event) => setAttachmentFilter(event.target.value)}
+              placeholder="Filter project files..."
+              aria-label="Filter attachment files"
+            />
+            <div className="attachment-file-list">
+              {visibleFiles.length === 0 ? <p>No supported project files found.</p> : visibleFiles.map((file) => {
+                const selected = attachmentPaths.includes(file.path);
+                const limitReached = attachmentPaths.length >= MAX_CHAT_ATTACHMENTS && !selected;
+                return (
+                  <label className={limitReached ? 'disabled' : ''} key={file.path}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={limitReached}
+                      onChange={() => onToggleAttachment(file.path)}
+                    />
+                    <Icon name="file" size={14}/>
+                    <span><strong>{file.name}</strong><small>{file.path} · {formatBytes(file.size)}</small></span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {pendingFiles.length > 0 && (
+          <div className="pending-attachments" aria-label="Pending attachments">
+            {pendingFiles.map((file) => (
+              <span className="attachment-chip" key={file.path} title={file.path}>
+                <Icon name="file" size={13}/>
+                <span>{file.name}</span>
+                <button type="button" onClick={() => onRemoveAttachment(file.path)} aria-label={`Remove ${file.name}`}>
+                  <Icon name="close" size={11}/>
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
           value={input}
           onChange={(event) => onInput(event.target.value)}
@@ -127,6 +206,15 @@ export function ChatPanel({
         <div className="composer-footer">
           <span>Enter to send · Shift+Enter for a new line</span>
           <div>
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={() => setAttachmentPickerOpen((open) => !open)}
+              aria-expanded={attachmentPickerOpen}
+              title="Attach files to this message"
+            >
+              <Icon name="file" size={15}/>Attach{attachmentPaths.length > 0 ? ` (${attachmentPaths.length})` : ''}
+            </button>
             <button
               className="button button-quiet"
               onClick={onProposeRevision}
@@ -155,4 +243,10 @@ function formatTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

@@ -7,6 +7,7 @@ import { PdfPane } from './components/PdfPane';
 import { RevisionPanel } from './components/RevisionPanel';
 import { WorkspaceRail } from './components/WorkspaceRail';
 import type {
+  ChatAttachment,
   ChatMessage,
   ChatSession,
   ChatSessionMeta,
@@ -59,6 +60,7 @@ export default function OctavePage() {
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [pickingWorkspace, setPickingWorkspace] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [attachmentPaths, setAttachmentPaths] = useState<string[]>([]);
   const [compileEngine, setCompileEngine] = useState<CompileEngine>('pdflatex');
   const [compileLog, setCompileLog] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
@@ -133,6 +135,7 @@ export default function OctavePage() {
     setPdfUrl('');
     setCompileLog('');
     setRevision(null);
+    setAttachmentPaths([]);
 
     const [fileData, contextData, chatData, citationData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
@@ -207,6 +210,7 @@ export default function OctavePage() {
         clearDocument();
         setFiles([]);
         setChats([]);
+        setAttachmentPaths([]);
         setWorkspaceFormOpen(true);
       }
     }
@@ -381,6 +385,7 @@ export default function OctavePage() {
     setChatScope(data.chat.scope);
     setChatDocumentPath(data.chat.documentPath ?? '');
     setMessages(data.chat.messages);
+    setAttachmentPaths([]);
     window.localStorage.setItem(`octave:chat:${workspaceId}`, chatId);
     if (show) setWorkView('chat');
   }
@@ -394,13 +399,24 @@ export default function OctavePage() {
     const scopedDocumentPath = activeChatId ? chatDocumentPath : newChatDocumentPath;
     const now = new Date().toISOString();
     const priorMessages = messages;
+    const pendingAttachments = attachmentPaths
+      .map((attachmentPath) => files.find((file) => file.path === attachmentPath))
+      .filter((file): file is OctaveFile => Boolean(file))
+      .map(toOptimisticAttachment);
+    const optimisticUser: ChatMessage = {
+      ts: now,
+      role: 'user',
+      content: prompt,
+      ...(pendingAttachments.length > 0 ? { attachments: pendingAttachments } : {}),
+    };
     const optimistic: ChatMessage[] = [
       ...priorMessages,
-      { ts: now, role: 'user', content: prompt },
+      optimisticUser,
       { ts: now, role: 'assistant', content: '' },
     ];
     setMessages(optimistic);
     setChatInput('');
+    setAttachmentPaths([]);
     setChatLoading(true);
     setWorkView('chat');
     const abort = new AbortController();
@@ -418,6 +434,7 @@ export default function OctavePage() {
           documentPath: chatScope === 'document' ? (scopedDocumentPath || undefined) : undefined,
           provider: providerId,
           model: modelId || undefined,
+          attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
         }),
       });
       if (!response.ok) {
@@ -433,7 +450,7 @@ export default function OctavePage() {
         const { done, value } = await reader.read();
         if (done) break;
         assistantContent += decoder.decode(value, { stream: true });
-        setMessages([...priorMessages, { ts: now, role: 'user', content: prompt }, { ts: now, role: 'assistant', content: assistantContent }]);
+        setMessages([...priorMessages, optimisticUser, { ts: now, role: 'assistant', content: assistantContent }]);
       }
       assistantContent += decoder.decode();
       await loadChat(chatId);
@@ -467,7 +484,20 @@ export default function OctavePage() {
     setChatDocumentPath(scope === 'document' ? selectedPath : '');
     setActiveChatId('');
     setMessages([]);
+    setAttachmentPaths([]);
     setError('');
+  }
+
+  function toggleAttachment(attachmentPath: string): void {
+    setAttachmentPaths((current) => {
+      if (current.includes(attachmentPath)) return current.filter((path) => path !== attachmentPath);
+      if (current.length >= 8) {
+        showError(new Error('A chat message can include at most 8 attachments.'));
+        return current;
+      }
+      setError('');
+      return [...current, attachmentPath];
+    });
   }
 
   async function proposeRevision(): Promise<void> {
@@ -701,6 +731,8 @@ export default function OctavePage() {
                 {workView === 'chat' && (
                   <ChatPanel
                     messages={messages}
+                    files={files}
+                    attachmentPaths={attachmentPaths}
                     input={chatInput}
                     loading={chatLoading}
                     revising={revising}
@@ -715,6 +747,8 @@ export default function OctavePage() {
                     onProvider={setProvider}
                     onModel={setModel}
                     onScope={changeChatScope}
+                    onToggleAttachment={toggleAttachment}
+                    onRemoveAttachment={(attachmentPath) => setAttachmentPaths((current) => current.filter((path) => path !== attachmentPath))}
                     onSend={() => sendChat().catch(showError)}
                     onProposeRevision={() => proposeRevision().catch(showError)}
                     onStop={stopChat}
@@ -816,6 +850,23 @@ function DocumentEmpty({ onCreate }: { onCreate: () => void }) {
 
 function pdfEndpoint(workspaceId: string, documentPath: string): string {
   return `/api/pdf?workspaceId=${encodeURIComponent(workspaceId)}&path=${encodeURIComponent(documentPath)}&t=${Date.now()}`;
+}
+
+function toOptimisticAttachment(file: OctaveFile): ChatAttachment {
+  const kind: ChatAttachment['kind'] = file.extension === '.pdf'
+    ? 'pdf'
+    : ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(file.extension)
+      ? 'image'
+      : file.editable ? 'text' : 'office';
+  return {
+    path: file.path,
+    name: file.name,
+    kind,
+    content: '',
+    warnings: [],
+    sourceBytes: file.size,
+    truncated: false,
+  };
 }
 
 async function apiJson<T = Record<string, unknown>>(url: string, init?: RequestInit): Promise<T> {

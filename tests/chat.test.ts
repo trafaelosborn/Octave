@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createNewChatSession, generateChatTitle, isChatSession } from '../src/core/chat.js';
+import {
+  createNewChatSession,
+  generateChatTitle,
+  isChatSession,
+  MAX_CHAT_ATTACHMENTS,
+} from '../src/core/chat.js';
 
 describe('chat model', () => {
   it('creates a valid empty session', () => {
@@ -27,5 +32,41 @@ describe('chat model', () => {
 
   it('rejects malformed persisted sessions', () => {
     expect(isChatSession({ id: 'chat', messages: 'not-an-array' })).toBe(false);
+  });
+
+  it('accepts persisted user attachments and rejects them on assistant messages', () => {
+    const session = createNewChatSession();
+    const attachment = {
+      path: 'notes.md',
+      name: 'notes.md',
+      kind: 'text' as const,
+      content: 'Snapshot',
+      warnings: [],
+      sourceBytes: 8,
+      truncated: false,
+    };
+    session.messages.push({
+      ts: new Date().toISOString(),
+      role: 'user',
+      content: 'Read this.',
+      attachments: [attachment],
+    });
+    expect(isChatSession(session)).toBe(true);
+
+    session.messages[0] = {
+      ts: new Date().toISOString(),
+      role: 'assistant',
+      content: 'No.',
+      attachments: [attachment],
+    };
+    expect(isChatSession(session)).toBe(false);
+
+    session.messages[0] = {
+      ts: new Date().toISOString(),
+      role: 'user',
+      content: 'Too many.',
+      attachments: Array.from({ length: MAX_CHAT_ATTACHMENTS + 1 }, () => attachment),
+    };
+    expect(isChatSession(session)).toBe(false);
   });
 });

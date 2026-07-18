@@ -2,7 +2,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { sendChatMessage } from '../src/core/chat-engine.js';
+import {
+  sendChatMessage,
+} from '../src/core/chat-engine.js';
+import { MAX_ATTACHMENT_CONTEXT_CHARS, MAX_CHAT_ATTACHMENTS } from '../src/core/chat.js';
 import type { LLMProvider, Message } from '../src/providers/types.js';
 import { createChat, loadChat } from '../src/storage/chat-storage.js';
 
@@ -85,5 +88,79 @@ describe('chat engine', () => {
       userMessage: 'Hello',
       provider: new RecordingProvider(),
     })).rejects.toThrow('not found');
+  });
+
+  it('snapshots attached files onto their message and replays the snapshot on later turns', async () => {
+    await fs.writeFile(path.join(workspaceRoot, 'notes.md'), 'Original attached evidence.', 'utf8');
+    const chat = await createChat(workspaceRoot, { scope: 'workspace' });
+    const provider = new RecordingProvider();
+
+    const first = await sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Use these notes.',
+      provider,
+      attachmentPaths: ['notes.md'],
+    });
+
+    expect(first.userMessage.attachments).toMatchObject([{
+      path: 'notes.md',
+      name: 'notes.md',
+      kind: 'text',
+      content: 'Original attached evidence.',
+    }]);
+    expect(provider.messages.at(-1)?.content).toContain('<attachment index="1" path="notes.md" kind="text">');
+    expect(provider.messages.at(-1)?.content).toContain('Original attached evidence.');
+
+    await fs.writeFile(path.join(workspaceRoot, 'notes.md'), 'Changed after the first turn.', 'utf8');
+    await sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'What did the earlier evidence say?',
+      provider,
+    });
+
+    expect(provider.messages[1]?.content).toContain('Original attached evidence.');
+    expect(provider.messages[1]?.content).not.toContain('Changed after the first turn.');
+    expect((await loadChat(workspaceRoot, chat.id))?.messages[0]?.attachments?.[0]?.content)
+      .toBe('Original attached evidence.');
+  });
+
+  it('enforces attachment count and workspace boundaries before persisting the user message', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'workspace' });
+    const base = {
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Inspect these.',
+      provider: new RecordingProvider(),
+    };
+
+    await expect(sendChatMessage({
+      ...base,
+      attachmentPaths: Array.from({ length: MAX_CHAT_ATTACHMENTS + 1 }, (_, index) => `file-${index}.md`),
+    })).rejects.toThrow(`at most ${MAX_CHAT_ATTACHMENTS}`);
+    await expect(sendChatMessage({ ...base, attachmentPaths: ['../outside.md'] }))
+      .rejects.toThrow('escapes the workspace');
+    expect((await loadChat(workspaceRoot, chat.id))?.messages).toEqual([]);
+  });
+
+  it('bounds stored attachment text to the combined context limit', async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, 'long.md'),
+      'x'.repeat(MAX_ATTACHMENT_CONTEXT_CHARS + 500),
+      'utf8',
+    );
+    const chat = await createChat(workspaceRoot, { scope: 'workspace' });
+
+    const result = await sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Read the long attachment.',
+      provider: new RecordingProvider(),
+      attachmentPaths: ['long.md'],
+    });
+
+    expect(result.userMessage.attachments?.[0]?.content).toHaveLength(MAX_ATTACHMENT_CONTEXT_CHARS);
+    expect(result.userMessage.attachments?.[0]?.truncated).toBe(true);
   });
 });

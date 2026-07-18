@@ -18,10 +18,11 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Current state: workspace-local sessions are atomically stored under `.octave/chats/`, sorted by recent activity, reloadable through the API and Chats rail, and resilient to malformed neighboring files.
    - Remaining hardening: expose rename/delete controls in the UI, preserve interrupted streaming responses where useful, and add an export/import path.
 
-3. **File attachments**
-   - Shared format extraction is implemented; per-message attachment persistence and composer UI remain.
-   - Attach bounded local files to an individual chat turn without permanently pinning them.
-   - Enforce size, type, and workspace-boundary limits.
+3. **File attachments** — implemented
+   - Supported project files can be selected and attached to an individual chat turn without permanently pinning them.
+   - Extracted content is snapshotted onto the user message for durable, reproducible history.
+   - Each turn is limited to eight files, 25 MB of combined source data, and 60,000 extracted characters; existing type and workspace-boundary checks still apply.
+   - Images currently provide metadata and a vision-capability warning until provider capabilities are declared explicitly.
 
 4. **Saved review memos**
    - Persist serious review outputs as named Markdown artifacts separate from ordinary chat.

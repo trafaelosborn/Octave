@@ -1,9 +1,25 @@
 import { randomUUID } from 'node:crypto';
+import type { ExtractedDocumentKind } from './extract.js';
+
+export const MAX_CHAT_ATTACHMENTS = 8;
+export const MAX_ATTACHMENT_SOURCE_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_CONTEXT_CHARS = 60_000;
+
+export interface ChatAttachment {
+  path: string;
+  name: string;
+  kind: ExtractedDocumentKind;
+  content: string;
+  warnings: string[];
+  sourceBytes: number;
+  truncated: boolean;
+}
 
 export interface ChatMessage {
   ts: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachment[];
 }
 
 export type ChatScope = 'workspace' | 'document';
@@ -80,6 +96,39 @@ function isChatMessage(value: unknown): value is ChatMessage {
   return (
     typeof message.ts === 'string' &&
     (message.role === 'user' || message.role === 'assistant') &&
-    typeof message.content === 'string'
+    typeof message.content === 'string' &&
+    (message.attachments === undefined || (
+      message.role === 'user' &&
+      isValidAttachmentSet(message.attachments)
+    ))
+  );
+}
+
+function isValidAttachmentSet(value: unknown): value is ChatAttachment[] {
+  if (!Array.isArray(value) || value.length > MAX_CHAT_ATTACHMENTS || !value.every(isChatAttachment)) {
+    return false;
+  }
+  return (
+    value.reduce((total, attachment) => total + attachment.sourceBytes, 0) <= MAX_ATTACHMENT_SOURCE_BYTES &&
+    value.reduce((total, attachment) => total + attachment.content.length, 0) <= MAX_ATTACHMENT_CONTEXT_CHARS
+  );
+}
+
+function isChatAttachment(value: unknown): value is ChatAttachment {
+  if (!value || typeof value !== 'object') return false;
+  const attachment = value as Partial<ChatAttachment>;
+  return (
+    typeof attachment.path === 'string' &&
+    Boolean(attachment.path.trim()) &&
+    typeof attachment.name === 'string' &&
+    Boolean(attachment.name.trim()) &&
+    (attachment.kind === 'text' || attachment.kind === 'pdf' || attachment.kind === 'office' || attachment.kind === 'image') &&
+    typeof attachment.content === 'string' &&
+    Array.isArray(attachment.warnings) &&
+    attachment.warnings.every((warning) => typeof warning === 'string') &&
+    typeof attachment.sourceBytes === 'number' &&
+    Number.isSafeInteger(attachment.sourceBytes) &&
+    attachment.sourceBytes >= 0 &&
+    typeof attachment.truncated === 'boolean'
   );
 }

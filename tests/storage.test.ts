@@ -42,4 +42,23 @@ describe('workspace chat storage', () => {
     expect(await loadChat(workspaceRoot, chat.id)).toMatchObject({ scope: 'document', documentPath: 'proof.tex' });
     expect(await listChats(workspaceRoot)).toMatchObject([{ scope: 'document', documentPath: 'proof.tex' }]);
   });
+
+  it('atomically persists attachment snapshots on user messages', async () => {
+    const chat = await createChat(workspaceRoot);
+    const attachments = [{
+      path: 'evidence.md',
+      name: 'evidence.md',
+      kind: 'text' as const,
+      content: 'Durable evidence snapshot.',
+      warnings: [],
+      sourceBytes: 26,
+      truncated: false,
+    }];
+
+    await appendMessage(workspaceRoot, chat.id, 'user', 'Use this evidence.', attachments);
+
+    expect((await loadChat(workspaceRoot, chat.id))?.messages[0]?.attachments).toEqual(attachments);
+    await expect(appendMessage(workspaceRoot, chat.id, 'assistant', 'No attachment.', attachments))
+      .rejects.toThrow('Assistant messages');
+  });
 });

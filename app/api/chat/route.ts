@@ -17,9 +17,16 @@ export async function POST(request: Request): Promise<Response> {
       documentPath?: string;
       provider?: string;
       model?: string;
+      attachmentPaths?: string[];
     }>(request);
     const prompt = body.prompt?.trim() ?? '';
     if (!prompt) throw new Error('A prompt is required.');
+    if (body.attachmentPaths !== undefined && (
+      !Array.isArray(body.attachmentPaths) ||
+      body.attachmentPaths.some((attachmentPath) => typeof attachmentPath !== 'string')
+    )) {
+      throw new Error('attachmentPaths must be an array of workspace-relative file paths.');
+    }
 
     const workspace = await getWorkspace(body.workspaceId);
     const provider = createProvider(body.provider ?? process.env.OCTAVE_DEFAULT_PROVIDER ?? 'ollama', body.model);
@@ -48,6 +55,7 @@ export async function POST(request: Request): Promise<Response> {
         };
         if (scopedDocumentPath !== undefined) options.currentDocumentPath = scopedDocumentPath;
         if (body.model !== undefined) options.model = body.model;
+        if (body.attachmentPaths !== undefined) options.attachmentPaths = body.attachmentPaths;
 
         sendChatMessage(options, (delta) => {
           controller.enqueue(encoder.encode(delta));

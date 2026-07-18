@@ -20,6 +20,17 @@ export interface ChatMessage {
   ts: string;
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachment[];
+}
+
+export interface ChatAttachment {
+  path: string;
+  name: string;
+  kind: 'text' | 'pdf' | 'office' | 'image';
+  content: string;
+  warnings: string[];
+  sourceBytes: number;
+  truncated: boolean;
 }
 
 export type ChatScope = 'workspace' | 'document';

@@ -7,6 +7,8 @@ import {
   type ChatSession,
   type ChatSessionMeta,
   type ChatScope,
+  type ChatAttachment,
+  type ChatMessage,
 } from '../core/chat.js';
 
 const CHATS_DIRECTORY = path.join('.octave', 'chats');
@@ -84,6 +86,7 @@ export async function appendMessage(
   chatId: string,
   role: 'user' | 'assistant',
   content: string,
+  attachments?: ChatAttachment[],
 ): Promise<ChatSession> {
   const normalizedContent = content.trim();
   if (!normalizedContent) throw new Error('Chat messages cannot be empty.');
@@ -91,11 +94,17 @@ export async function appendMessage(
   const session = await loadChat(workspaceRoot, chatId);
   if (!session) throw new Error(`Chat session not found: ${chatId}`);
 
-  session.messages.push({
+  if (role === 'assistant' && attachments !== undefined) {
+    throw new Error('Assistant messages cannot include file attachments.');
+  }
+
+  const message: ChatMessage = {
     ts: new Date().toISOString(),
     role,
     content: normalizedContent,
-  });
+  };
+  if (attachments !== undefined) message.attachments = attachments;
+  session.messages.push(message);
   session.updatedAt = new Date().toISOString();
 
   if (!session.title || session.title === 'New chat') {
