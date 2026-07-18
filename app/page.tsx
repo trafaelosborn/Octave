@@ -47,9 +47,12 @@ export default function OctavePage() {
   const [activeChatId, setActiveChatId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providers, setProviders] = useState<ProviderStatus[]>([
-    { id: 'demo', name: 'Offline demo', available: true, local: true },
+    { id: 'demo', name: 'Offline demo', available: true, local: true, models: [{ id: 'demo', name: 'Offline demo' }] },
   ]);
   const [providerId, setProviderId] = useState('demo');
+  const [modelId, setModelId] = useState('demo');
+  const [openingWorkspace, setOpeningWorkspace] = useState(false);
+  const [pickingWorkspace, setPickingWorkspace] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [compileEngine, setCompileEngine] = useState<CompileEngine>('pdflatex');
   const [compileLog, setCompileLog] = useState('');
@@ -105,7 +108,10 @@ export default function OctavePage() {
     const preferredProvider = providerData.providers.find((provider) => provider.id === savedProvider && provider.available)
       ?? providerData.providers.find((provider) => provider.id === 'ollama' && provider.available)
       ?? providerData.providers.find((provider) => provider.available);
-    if (preferredProvider) setProviderId(preferredProvider.id);
+    if (preferredProvider) {
+      setProviderId(preferredProvider.id);
+      setModelId(window.localStorage.getItem(`octave:model:${preferredProvider.id}`) ?? preferredProvider.models[0]?.id ?? '');
+    }
 
     const savedWorkspaceId = window.localStorage.getItem('octave:workspace');
     const workspace = workspaceData.workspaces.find((candidate) => candidate.id === savedWorkspaceId)
@@ -153,18 +159,35 @@ export default function OctavePage() {
   }
 
   async function addWorkspace(): Promise<void> {
-    const input: { rootPath: string; name?: string } = { rootPath: workspacePath };
-    if (workspaceName.trim()) input.name = workspaceName.trim();
-    const data = await apiJson<{ workspace: Workspace; workspaces: Workspace[] }>('/api/workspaces', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    setWorkspaces(data.workspaces);
-    setWorkspaceName('');
-    setWorkspacePath('');
-    setWorkspaceFormOpen(false);
-    await loadWorkspace(data.workspace.id, data.workspaces);
+    setOpeningWorkspace(true);
+    setError('');
+    try {
+      const input: { rootPath: string; name?: string } = { rootPath: workspacePath };
+      if (workspaceName.trim()) input.name = workspaceName.trim();
+      const data = await apiJson<{ workspace: Workspace; workspaces: Workspace[] }>('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      setWorkspaces(data.workspaces);
+      setWorkspaceName('');
+      setWorkspacePath('');
+      setWorkspaceFormOpen(false);
+      await loadWorkspace(data.workspace.id, data.workspaces);
+    } finally {
+      setOpeningWorkspace(false);
+    }
+  }
+
+  async function browseWorkspace(): Promise<void> {
+    setPickingWorkspace(true);
+    setError('');
+    try {
+      const data = await apiJson<{ path: string | null }>('/api/workspaces/pick', { method: 'POST' });
+      if (data.path) setWorkspacePath(data.path);
+    } finally {
+      setPickingWorkspace(false);
+    }
   }
 
   async function removeWorkspace(workspaceId: string): Promise<void> {
@@ -373,6 +396,7 @@ export default function OctavePage() {
           prompt,
           documentPath: selectedPath || undefined,
           provider: providerId,
+          model: modelId || undefined,
         }),
       });
       if (!response.ok) {
@@ -427,6 +451,7 @@ export default function OctavePage() {
           path: selectedPath,
           instruction,
           provider: providerId,
+          model: modelId || undefined,
         }),
       });
       const hunks = buildDiffHunks(proposal.before, proposal.after);
@@ -462,6 +487,14 @@ export default function OctavePage() {
   function setProvider(nextProviderId: string): void {
     setProviderId(nextProviderId);
     window.localStorage.setItem('octave:provider', nextProviderId);
+    const provider = providers.find((candidate) => candidate.id === nextProviderId);
+    const nextModel = window.localStorage.getItem(`octave:model:${nextProviderId}`) ?? provider?.models[0]?.id ?? '';
+    setModelId(nextModel);
+  }
+
+  function setModel(nextModelId: string): void {
+    setModelId(nextModelId);
+    window.localStorage.setItem(`octave:model:${providerId}`, nextModelId);
   }
 
   function openOutlineItem(item: OutlineItem): void {
@@ -530,6 +563,9 @@ export default function OctavePage() {
         onWorkspaceName={setWorkspaceName}
         onWorkspacePath={setWorkspacePath}
         onAddWorkspace={guard(addWorkspace)}
+        onBrowseWorkspace={guard(browseWorkspace)}
+        openingWorkspace={openingWorkspace}
+        pickingWorkspace={pickingWorkspace}
         onRemoveWorkspace={(id) => removeWorkspace(id).catch(showError)}
         onFileFilter={setFileFilter}
         onOpenFile={(path, line) => loadDocument(path, activeWorkspaceId, line).catch(showError)}
@@ -553,6 +589,15 @@ export default function OctavePage() {
             <h1>{selectedPath || 'Choose a research document'}</h1>
           </div>
           <div className="document-status">
+            <label className="ai-picker" title={providers.find((provider) => provider.id === providerId)?.setupHint}>
+              <span>AI</span>
+              <select value={providerId} onChange={(event) => setProvider(event.target.value)} aria-label="AI provider">
+                {providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.available}>{provider.name}{provider.available ? '' : ' — setup required'}</option>)}
+              </select>
+              <select value={modelId} onChange={(event) => setModel(event.target.value)} aria-label="AI model">
+                {(providers.find((provider) => provider.id === providerId)?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.name ?? model.id}</option>)}
+              </select>
+            </label>
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
             <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
@@ -569,6 +614,9 @@ export default function OctavePage() {
             onName={setWorkspaceName}
             onPath={setWorkspacePath}
             onOpen={guard(addWorkspace)}
+            onBrowse={guard(browseWorkspace)}
+            opening={openingWorkspace}
+            picking={pickingWorkspace}
           />
         ) : (
           <>
@@ -621,9 +669,11 @@ export default function OctavePage() {
                     revising={revising}
                     selectedPath={selectedPath}
                     providerId={providerId}
+                    modelId={modelId}
                     providers={providers}
                     onInput={setChatInput}
                     onProvider={setProvider}
+                    onModel={setModel}
                     onSend={() => sendChat().catch(showError)}
                     onProposeRevision={() => proposeRevision().catch(showError)}
                     onStop={stopChat}
@@ -679,12 +729,18 @@ function WelcomePanel({
   onName,
   onPath,
   onOpen,
+  onBrowse,
+  opening,
+  picking,
 }: {
   workspaceName: string;
   workspacePath: string;
   onName: (value: string) => void;
   onPath: (value: string) => void;
   onOpen: () => void;
+  onBrowse: () => void;
+  opening: boolean;
+  picking: boolean;
 }) {
   return (
     <div className="welcome-panel">
@@ -698,8 +754,8 @@ function WelcomePanel({
         <span className="welcome-number">01</span>
         <h3>Open a local workspace</h3>
         <label>Name <small>optional</small><input value={workspaceName} onChange={(event) => onName(event.target.value)} placeholder="Finite-depth geometry" /></label>
-        <label>Absolute folder path<input value={workspacePath} onChange={(event) => onPath(event.target.value)} placeholder="C:\Research\Paper" /></label>
-        <button className="button button-primary full-width" disabled={!workspacePath.trim()} onClick={onOpen}>Open workspace</button>
+        <label>Project folder<div className="path-picker"><input value={workspacePath} onChange={(event) => onPath(event.target.value)} placeholder="Choose a folder or paste its path" /><button className="button button-secondary" disabled={picking} onClick={onBrowse}>{picking ? 'Choosing…' : 'Browse…'}</button></div></label>
+        <button className="button button-primary full-width" disabled={!workspacePath.trim() || opening} onClick={onOpen}>{opening ? 'Opening workspace…' : 'Open workspace'}</button>
         <p>Octave writes only its chat and context state to a hidden `.octave` folder inside the workspace.</p>
       </div>
     </div>

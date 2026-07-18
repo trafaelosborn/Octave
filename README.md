@@ -11,7 +11,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Opens existing local folders without importing or converting them.
 - Edits TeX, BibTeX, Markdown, text, Python, R, and LaTeX support files.
 - Keeps research chats at project scope while attaching the active document and pinned files at send time.
-- Streams responses from local Ollama models or Anthropic. An offline demo provider exercises the interface without credentials.
+- Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
 - Audits citation keys against workspace BibTeX files.
@@ -57,6 +57,8 @@ Octave discovers providers at startup:
 - **Offline demo:** always available; useful for exploring the workflow without model access.
 - **Ollama:** available when an Ollama server responds at `OLLAMA_BASE_URL`, defaulting to `http://127.0.0.1:11434`.
 - **Anthropic:** available when `ANTHROPIC_API_KEY` is set.
+- **OpenAI:** available when `OPENAI_API_KEY` is set.
+- **xAI / Grok:** available when `XAI_API_KEY` is set.
 
 Copy `.env.example` to `.env.local` to set persistent local defaults. The selected provider determines where document context is processed.
 
@@ -148,7 +150,6 @@ npm pack --dry-run
 
 ## Roadmap
 
-- OpenAI-compatible provider support
 - Richer bibliography workflows
 - Desktop packaging
 - Cross-platform folder picker integration

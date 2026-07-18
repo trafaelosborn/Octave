@@ -1,18 +1,22 @@
 import {
   AnthropicProvider,
   OllamaProvider,
+  OpenAIProvider,
+  XAIProvider,
   type LLMProvider,
   type Message,
   type StreamChatOptions,
 } from '@trafaelosborn/octave/providers';
 
-export type ProviderId = 'ollama' | 'anthropic' | 'demo';
+export type ProviderId = 'ollama' | 'anthropic' | 'openai' | 'xai' | 'demo';
 
 export interface ProviderStatus {
   id: ProviderId;
   name: string;
   available: boolean;
   local: boolean;
+  models: Array<{ id: string; name?: string }>;
+  setupHint?: string;
 }
 
 export function createProvider(providerId: string, model?: string): LLMProvider {
@@ -23,16 +27,37 @@ export function createProvider(providerId: string, model?: string): LLMProvider 
   if (providerId === 'ollama') {
     return model ? new OllamaProvider({ model }) : new OllamaProvider();
   }
-  throw new Error('Provider must be ollama, anthropic, or demo.');
+  if (providerId === 'openai') return model ? new OpenAIProvider({ model }) : new OpenAIProvider();
+  if (providerId === 'xai') return model ? new XAIProvider({ model }) : new XAIProvider();
+  throw new Error('Provider must be ollama, anthropic, openai, xai, or demo.');
 }
 
 export async function listProviderStatus(): Promise<ProviderStatus[]> {
   const ollama = new OllamaProvider();
   const anthropic = new AnthropicProvider();
+  const openai = new OpenAIProvider();
+  const xai = new XAIProvider();
+  const providers = [
+    { provider: ollama, local: true },
+    { provider: anthropic, local: false, setupHint: 'Set ANTHROPIC_API_KEY in .env.local.' },
+    { provider: openai, local: false, setupHint: 'Set OPENAI_API_KEY in .env.local.' },
+    { provider: xai, local: false, setupHint: 'Set XAI_API_KEY in .env.local.' },
+  ];
+  const statuses = await Promise.all(providers.map(async ({ provider, local, setupHint }) => {
+    const available = await provider.isAvailable?.() ?? true;
+    const status: ProviderStatus = {
+      id: provider.id as ProviderId,
+      name: provider.name,
+      available,
+      local,
+      models: await provider.listModels?.() ?? [],
+    };
+    if (!available && setupHint) status.setupHint = setupHint;
+    return status;
+  }));
   return [
-    { id: 'ollama', name: ollama.name, available: await ollama.isAvailable(), local: true },
-    { id: 'anthropic', name: anthropic.name, available: await anthropic.isAvailable(), local: false },
-    { id: 'demo', name: 'Offline demo', available: true, local: true },
+    ...statuses,
+    { id: 'demo', name: 'Offline demo', available: true, local: true, models: [{ id: 'demo', name: 'Offline demo' }] },
   ];
 }
 

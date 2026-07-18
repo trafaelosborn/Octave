@@ -124,6 +124,9 @@ button { border: 0; }
 }
 .square-button:hover { background: #2b403a; }
 .workspace-form { display: grid; gap: 8px; margin-top: 10px; }
+.path-picker { align-items: stretch; display: flex; gap: 7px; }
+.path-picker input { flex: 1; min-width: 0; }
+.path-picker .button { flex: 0 0 auto; }
 .workspace-form input::placeholder { color: #78908a; }
 .workspace-manage-list { border-top: 1px solid rgb(255 255 255 / 7%); margin-top: 5px; padding-top: 7px; }
 .workspace-manage-list div { align-items: center; color: var(--rail-muted); display: flex; gap: 8px; padding: 4px 2px; }
@@ -241,6 +244,9 @@ button { border: 0; }
   min-height: 72px;
   padding: 10px 20px;
 }
+.ai-picker { align-items: center; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; display: flex; gap: 5px; padding: 4px 6px; }
+.ai-picker > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.ai-picker select { background: transparent; border: 0; color: var(--ink); font-size: 11px; max-width: 145px; outline: 0; }
 .document-heading { flex: 1; min-width: 0; }
 .eyebrow { color: var(--accent); font-size: 9px; font-weight: 800; letter-spacing: .14em; margin: 0 0 2px; text-transform: uppercase; }
 .document-heading h1 { font-family: var(--font-serif); font-size: 21px; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

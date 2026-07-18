@@ -12,9 +12,11 @@ export function ChatPanel({
   revising,
   selectedPath,
   providerId,
+  modelId,
   providers,
   onInput,
   onProvider,
+  onModel,
   onSend,
   onProposeRevision,
   onStop,
@@ -25,9 +27,11 @@ export function ChatPanel({
   revising: boolean;
   selectedPath: string;
   providerId: string;
+  modelId: string;
   providers: ProviderStatus[];
   onInput: (value: string) => void;
   onProvider: (providerId: string) => void;
+  onModel: (modelId: string) => void;
   onSend: () => void;
   onProposeRevision: () => void;
   onStop: () => void;
@@ -56,6 +60,9 @@ export function ChatPanel({
                 {provider.name}{provider.available ? '' : ' (unavailable)'}
               </option>
             ))}
+          </select>
+          <select value={modelId} onChange={(event) => onModel(event.target.value)} aria-label="Model">
+            {(activeProvider?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.name ?? model.id}</option>)}
           </select>
         </label>
       </div>
