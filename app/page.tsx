@@ -1,0 +1,729 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChatPanel } from './components/ChatPanel';
+import { Icon } from './components/Icon';
+import { PdfPane } from './components/PdfPane';
+import { RevisionPanel } from './components/RevisionPanel';
+import { WorkspaceRail } from './components/WorkspaceRail';
+import type {
+  ChatMessage,
+  ChatSession,
+  ChatSessionMeta,
+  CitationScan,
+  OctaveFile,
+  OutlineItem,
+  ProviderStatus,
+  RailView,
+  RevisionPreview,
+  SearchResult,
+  WorkView,
+  Workspace,
+} from './lib/client-types';
+import { buildDiffHunks, materializeRevision } from './lib/diff';
+import { parseLatexOutline } from './lib/outline';
+import type { CompileEngine } from '@trafaelosborn/octave/core';
+
+const REVIEW_PROMPT = [
+  'Review this document as a serious research memo.',
+  'Give a verdict, identify the central contribution, trace the argument structure, and distinguish strengths from technical risks.',
+  'Call out missing assumptions, unsupported claims, citation gaps, and the highest-leverage revisions.',
+].join(' ');
+
+export default function OctavePage() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState('');
+  const [workspaceFormOpen, setWorkspaceFormOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspacePath, setWorkspacePath] = useState('');
+  const [files, setFiles] = useState<OctaveFile[]>([]);
+  const [selectedPath, setSelectedPath] = useState('');
+  const [content, setContent] = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [documentExtension, setDocumentExtension] = useState('');
+  const [newDocumentPath, setNewDocumentPath] = useState('paper.tex');
+  const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
+  const [chats, setChats] = useState<ChatSessionMeta[]>([]);
+  const [activeChatId, setActiveChatId] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [providers, setProviders] = useState<ProviderStatus[]>([
+    { id: 'demo', name: 'Offline demo', available: true, local: true },
+  ]);
+  const [providerId, setProviderId] = useState('demo');
+  const [chatInput, setChatInput] = useState('');
+  const [compileEngine, setCompileEngine] = useState<CompileEngine>('pdflatex');
+  const [compileLog, setCompileLog] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [revision, setRevision] = useState<RevisionPreview | null>(null);
+  const [includedHunks, setIncludedHunks] = useState<Set<string>>(new Set());
+  const [railView, setRailView] = useState<RailView>('files');
+  const [workView, setWorkView] = useState<WorkView>('editor');
+  const [railOpen, setRailOpen] = useState(false);
+  const [fileFilter, setFileFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [citations, setCitations] = useState<CitationScan | null>(null);
+  const [error, setError] = useState('');
+  const [booting, setBooting] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [compiling, setCompiling] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [revising, setRevising] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const lineGutterRef = useRef<HTMLDivElement>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
+
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const dirty = content !== savedContent;
+  const outline = useMemo(() => parseLatexOutline(content), [content]);
+  const lineCount = useMemo(() => Math.max(1, content.split(/\r?\n/).length), [content]);
+  const wordCount = useMemo(() => content.trim() ? content.trim().split(/\s+/).length : 0, [content]);
+  const revisionHunks = useMemo(
+    () => revision ? buildDiffHunks(revision.before, revision.after) : [],
+    [revision],
+  );
+  const canRun = documentExtension === '.py' || documentExtension === '.r';
+
+  useEffect(() => {
+    bootstrap().catch(showError).finally(() => setBooting(false));
+    // Initial bootstrap intentionally runs once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function bootstrap(): Promise<void> {
+    const [workspaceData, providerData] = await Promise.all([
+      apiJson<{ workspaces: Workspace[] }>('/api/workspaces'),
+      apiJson<{ providers: ProviderStatus[] }>('/api/providers'),
+    ]);
+    setWorkspaces(workspaceData.workspaces);
+    setProviders(providerData.providers);
+
+    const savedProvider = window.localStorage.getItem('octave:provider');
+    const preferredProvider = providerData.providers.find((provider) => provider.id === savedProvider && provider.available)
+      ?? providerData.providers.find((provider) => provider.id === 'ollama' && provider.available)
+      ?? providerData.providers.find((provider) => provider.available);
+    if (preferredProvider) setProviderId(preferredProvider.id);
+
+    const savedWorkspaceId = window.localStorage.getItem('octave:workspace');
+    const workspace = workspaceData.workspaces.find((candidate) => candidate.id === savedWorkspaceId)
+      ?? workspaceData.workspaces[0];
+    if (workspace) await loadWorkspace(workspace.id, workspaceData.workspaces);
+    else setWorkspaceFormOpen(true);
+  }
+
+  async function loadWorkspace(workspaceId: string, knownWorkspaces = workspaces): Promise<void> {
+    if (!workspaceId) return;
+    setActiveWorkspaceId(workspaceId);
+    window.localStorage.setItem('octave:workspace', workspaceId);
+    setError('');
+    setPdfUrl('');
+    setCompileLog('');
+    setRevision(null);
+
+    const [fileData, contextData, chatData, citationData] = await Promise.all([
+      apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<{ pinnedPaths: string[] }>(`/api/context?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(workspaceId)}`),
+    ]);
+    setFiles(fileData.files);
+    setPinnedPaths(contextData.pinnedPaths);
+    setChats(chatData.chats);
+    setCitations(citationData);
+
+    const workspace = knownWorkspaces.find((candidate) => candidate.id === workspaceId) ?? fileData.workspace;
+    const paths = new Set(fileData.files.map((file) => file.path));
+    const nextPath = workspace.lastDocumentPath && paths.has(workspace.lastDocumentPath)
+      ? workspace.lastDocumentPath
+      : fileData.files.find((file) => file.extension === '.tex')?.path ?? fileData.files[0]?.path ?? '';
+
+    if (nextPath) await loadDocument(nextPath, workspaceId);
+    else clearDocument();
+
+    const savedChatId = window.localStorage.getItem(`octave:chat:${workspaceId}`);
+    const chat = chatData.chats.find((candidate) => candidate.id === savedChatId) ?? chatData.chats[0];
+    if (chat) await loadChat(chat.id, workspaceId, false);
+    else {
+      setActiveChatId('');
+      setMessages([]);
+    }
+  }
+
+  async function addWorkspace(): Promise<void> {
+    const input: { rootPath: string; name?: string } = { rootPath: workspacePath };
+    if (workspaceName.trim()) input.name = workspaceName.trim();
+    const data = await apiJson<{ workspace: Workspace; workspaces: Workspace[] }>('/api/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    setWorkspaces(data.workspaces);
+    setWorkspaceName('');
+    setWorkspacePath('');
+    setWorkspaceFormOpen(false);
+    await loadWorkspace(data.workspace.id, data.workspaces);
+  }
+
+  async function removeWorkspace(workspaceId: string): Promise<void> {
+    const data = await apiJson<{ workspaces: Workspace[] }>(`/api/workspaces?id=${encodeURIComponent(workspaceId)}`, { method: 'DELETE' });
+    setWorkspaces(data.workspaces);
+    if (workspaceId === activeWorkspaceId) {
+      const next = data.workspaces[0];
+      if (next) await loadWorkspace(next.id, data.workspaces);
+      else {
+        setActiveWorkspaceId('');
+        clearDocument();
+        setFiles([]);
+        setChats([]);
+        setWorkspaceFormOpen(true);
+      }
+    }
+  }
+
+  async function refreshFiles(preferredPath = selectedPath): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ files: OctaveFile[] }>(`/api/files?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+    setFiles(data.files);
+    if (preferredPath && !data.files.some((file) => file.path === preferredPath)) clearDocument();
+  }
+
+  async function loadDocument(documentPath: string, workspaceId = activeWorkspaceId, focusLine?: number): Promise<void> {
+    const data = await apiJson<{
+      path: string;
+      extension: string;
+      content: string;
+      pdfAvailable: boolean;
+    }>(`/api/document?workspaceId=${encodeURIComponent(workspaceId)}&path=${encodeURIComponent(documentPath)}`);
+    setSelectedPath(data.path);
+    setDocumentExtension(data.extension);
+    setContent(data.content);
+    setSavedContent(data.content);
+    setPdfUrl(data.pdfAvailable ? pdfEndpoint(workspaceId, data.path) : '');
+    setRevision(null);
+    setError('');
+
+    if (focusLine) {
+      setWorkView('editor');
+      window.setTimeout(() => focusEditorLine(focusLine, data.content), 50);
+    }
+  }
+
+  async function saveDocument(nextContent = content): Promise<void> {
+    if (!activeWorkspaceId || !selectedPath) return;
+    setSaving(true);
+    try {
+      await apiJson('/api/document', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, path: selectedPath, content: nextContent }),
+      });
+      setContent(nextContent);
+      setSavedContent(nextContent);
+      setError('');
+      await refreshFiles(selectedPath);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createDocument(): Promise<void> {
+    const documentPath = newDocumentPath.trim();
+    if (!documentPath || !activeWorkspaceId) return;
+    const starter = documentPath.endsWith('.tex')
+      ? '\\documentclass{article}\n\\usepackage{amsmath,amssymb}\n\\title{Untitled Research Note}\n\\author{}\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\n\n\\end{document}\n'
+      : '';
+    await apiJson('/api/document', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: activeWorkspaceId, path: documentPath, content: starter }),
+    });
+    setNewDocumentPath('paper.tex');
+    await refreshFiles(documentPath);
+    await loadDocument(documentPath);
+    setWorkView('editor');
+  }
+
+  async function compileActiveDocument(): Promise<void> {
+    if (!selectedPath.endsWith('.tex') || !activeWorkspaceId) return;
+    setCompiling(true);
+    setCompileLog('Compiling...');
+    try {
+      if (dirty) await saveDocument();
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, path: selectedPath, engine: compileEngine }),
+      });
+      const data = await response.json() as { ok?: boolean; log?: string; pdfAvailable?: boolean; error?: string };
+      setCompileLog(data.log || data.error || '(no compiler output)');
+      setPdfUrl(data.pdfAvailable ? pdfEndpoint(activeWorkspaceId, selectedPath) : '');
+      if (!response.ok) setError('Compilation did not complete successfully. The full compiler log is available.');
+      else setError('');
+      if (window.innerWidth < 1180) setWorkView('log');
+    } finally {
+      setCompiling(false);
+    }
+  }
+
+  async function runActiveDocument(): Promise<void> {
+    if (!canRun || !activeWorkspaceId) return;
+    setRunning(true);
+    try {
+      if (dirty) await saveDocument();
+      const data = await apiJson<{ ok: boolean; log: string; durationMs: number }>('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, path: selectedPath }),
+      });
+      setCompileLog(`Run ${data.ok ? 'completed' : 'failed'} in ${(data.durationMs / 1_000).toFixed(1)}s\n\n${data.log || '(no output)'}`);
+      setWorkView('log');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function togglePinnedPath(documentPath: string): Promise<void> {
+    const next = pinnedPaths.includes(documentPath)
+      ? pinnedPaths.filter((candidate) => candidate !== documentPath)
+      : [...pinnedPaths, documentPath];
+    const data = await apiJson<{ pinnedPaths: string[] }>('/api/context', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: activeWorkspaceId, pinnedPaths: next }),
+    });
+    setPinnedPaths(data.pinnedPaths);
+  }
+
+  async function searchWorkspace(): Promise<void> {
+    if (!activeWorkspaceId || searchQuery.trim().length < 2) return;
+    setSearching(true);
+    try {
+      const data = await apiJson<{ results: SearchResult[] }>(`/api/search?workspaceId=${encodeURIComponent(activeWorkspaceId)}&q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchResults(data.results);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function refreshCitations(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    setCitations(await apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(activeWorkspaceId)}`));
+  }
+
+  async function createNewChat(): Promise<string> {
+    if (!activeWorkspaceId) throw new Error('Open a workspace before starting a chat.');
+    const data = await apiJson<{ chat: ChatSession }>('/api/chats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: activeWorkspaceId }),
+    });
+    setActiveChatId(data.chat.id);
+    setMessages([]);
+    window.localStorage.setItem(`octave:chat:${activeWorkspaceId}`, data.chat.id);
+    await refreshChats();
+    setWorkView('chat');
+    return data.chat.id;
+  }
+
+  async function refreshChats(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+    setChats(data.chats);
+  }
+
+  async function loadChat(chatId: string, workspaceId = activeWorkspaceId, show = true): Promise<void> {
+    const data = await apiJson<{ chat: ChatSession | null }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}&chatId=${encodeURIComponent(chatId)}`);
+    if (!data.chat) throw new Error('Chat session was not found.');
+    setActiveChatId(chatId);
+    setMessages(data.chat.messages);
+    window.localStorage.setItem(`octave:chat:${workspaceId}`, chatId);
+    if (show) setWorkView('chat');
+  }
+
+  async function sendChat(promptOverride?: string): Promise<void> {
+    const prompt = (promptOverride ?? chatInput).trim();
+    if (!prompt || chatLoading || !activeWorkspaceId) return;
+
+    const chatId = activeChatId || await createNewChat();
+    const now = new Date().toISOString();
+    const priorMessages = messages;
+    const optimistic: ChatMessage[] = [
+      ...priorMessages,
+      { ts: now, role: 'user', content: prompt },
+      { ts: now, role: 'assistant', content: '' },
+    ];
+    setMessages(optimistic);
+    setChatInput('');
+    setChatLoading(true);
+    setWorkView('chat');
+    const abort = new AbortController();
+    chatAbortRef.current = abort;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: abort.signal,
+        body: JSON.stringify({
+          workspaceId: activeWorkspaceId,
+          chatId,
+          prompt,
+          documentPath: selectedPath || undefined,
+          provider: providerId,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || 'Chat request failed.');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Chat provider returned no response stream.');
+      const decoder = new TextDecoder();
+      let assistantContent = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        assistantContent += decoder.decode(value, { stream: true });
+        setMessages([...priorMessages, { ts: now, role: 'user', content: prompt }, { ts: now, role: 'assistant', content: assistantContent }]);
+      }
+      assistantContent += decoder.decode();
+      await loadChat(chatId);
+      await refreshChats();
+      setError('');
+    } catch (chatError) {
+      if (chatError instanceof Error && chatError.name === 'AbortError') return;
+      throw chatError;
+    } finally {
+      if (chatAbortRef.current === abort) chatAbortRef.current = null;
+      setChatLoading(false);
+    }
+  }
+
+  function stopChat(): void {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    setChatLoading(false);
+    setMessages((current) => {
+      const last = current.at(-1);
+      return last?.role === 'assistant' && !last.content ? current.slice(0, -1) : current;
+    });
+  }
+
+  async function proposeRevision(): Promise<void> {
+    const instruction = chatInput.trim();
+    if (!instruction || !selectedPath || !activeWorkspaceId) return;
+    setRevising(true);
+    try {
+      if (dirty) await saveDocument();
+      const proposal = await apiJson<RevisionPreview>('/api/revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: activeWorkspaceId,
+          path: selectedPath,
+          instruction,
+          provider: providerId,
+        }),
+      });
+      const hunks = buildDiffHunks(proposal.before, proposal.after);
+      setRevision(proposal);
+      setIncludedHunks(new Set(hunks.map((hunk) => hunk.id)));
+      setChatInput('');
+      setWorkView('review');
+    } finally {
+      setRevising(false);
+    }
+  }
+
+  async function applyRevision(): Promise<void> {
+    if (!revision) return;
+    const finalContent = materializeRevision(revision.before, revision.after, revisionHunks, includedHunks);
+    await saveDocument(finalContent);
+    setRevision(null);
+    setIncludedHunks(new Set());
+    setPdfUrl('');
+    setCompileLog('Revision applied. Recompile the document to refresh the PDF artifact.');
+    setWorkView('editor');
+  }
+
+  function toggleHunk(hunkId: string): void {
+    setIncludedHunks((current) => {
+      const next = new Set(current);
+      if (next.has(hunkId)) next.delete(hunkId);
+      else next.add(hunkId);
+      return next;
+    });
+  }
+
+  function setProvider(nextProviderId: string): void {
+    setProviderId(nextProviderId);
+    window.localStorage.setItem('octave:provider', nextProviderId);
+  }
+
+  function openOutlineItem(item: OutlineItem): void {
+    setWorkView('editor');
+    window.setTimeout(() => focusEditorLine(item.line, content), 50);
+  }
+
+  function focusEditorLine(line: number, source: string): void {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const lines = source.split(/\r?\n/);
+    const targetLine = Math.max(1, Math.min(line, lines.length));
+    const start = lines.slice(0, targetLine - 1).reduce((length, value) => length + value.length + 1, 0);
+    const end = start + (lines[targetLine - 1]?.length ?? 0);
+    editor.focus();
+    editor.setSelectionRange(start, end);
+    editor.scrollTop = Math.max(0, (targetLine - 5) * 24);
+    if (lineGutterRef.current) lineGutterRef.current.scrollTop = editor.scrollTop;
+  }
+
+  function clearDocument(): void {
+    setSelectedPath('');
+    setDocumentExtension('');
+    setContent('');
+    setSavedContent('');
+    setPdfUrl('');
+    setRevision(null);
+  }
+
+  function showError(problem: unknown): void {
+    setError(problem instanceof Error ? problem.message : String(problem || 'Unknown error'));
+  }
+
+  const guard = (operation: () => Promise<void>) => () => operation().catch(showError);
+
+  if (booting) {
+    return <div className="boot-screen"><div className="brand-mark large">O</div><p>Opening the research workspace...</p></div>;
+  }
+
+  return (
+    <main className="octave-shell">
+      <WorkspaceRail
+        open={railOpen}
+        railView={railView}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        workspaceFormOpen={workspaceFormOpen}
+        workspaceName={workspaceName}
+        workspacePath={workspacePath}
+        files={files}
+        selectedPath={selectedPath}
+        pinnedPaths={pinnedPaths}
+        fileFilter={fileFilter}
+        searchQuery={searchQuery}
+        searchResults={searchResults}
+        searching={searching}
+        chats={chats}
+        activeChatId={activeChatId}
+        outline={outline}
+        citations={citations}
+        newDocumentPath={newDocumentPath}
+        onClose={() => setRailOpen(false)}
+        onRailView={setRailView}
+        onSelectWorkspace={(id) => loadWorkspace(id).catch(showError)}
+        onToggleWorkspaceForm={() => setWorkspaceFormOpen((open) => !open)}
+        onWorkspaceName={setWorkspaceName}
+        onWorkspacePath={setWorkspacePath}
+        onAddWorkspace={guard(addWorkspace)}
+        onRemoveWorkspace={(id) => removeWorkspace(id).catch(showError)}
+        onFileFilter={setFileFilter}
+        onOpenFile={(path, line) => loadDocument(path, activeWorkspaceId, line).catch(showError)}
+        onTogglePin={(path) => togglePinnedPath(path).catch(showError)}
+        onSearchQuery={setSearchQuery}
+        onSearch={guard(searchWorkspace)}
+        onOpenSearchResult={(result) => loadDocument(result.path, activeWorkspaceId, result.line).catch(showError)}
+        onNewChat={() => createNewChat().catch(showError)}
+        onOpenChat={(chatId) => loadChat(chatId).catch(showError)}
+        onOutlineItem={openOutlineItem}
+        onRefreshCitations={guard(refreshCitations)}
+        onNewDocumentPath={setNewDocumentPath}
+        onCreateDocument={guard(createDocument)}
+      />
+
+      <section className="workstation">
+        <header className="topbar">
+          <button className="icon-button rail-toggle" onClick={() => setRailOpen(true)} aria-label="Open workspace navigation"><Icon name="menu"/></button>
+          <div className="document-heading">
+            <p className="eyebrow">{activeWorkspace?.name || 'No workspace'}</p>
+            <h1>{selectedPath || 'Choose a research document'}</h1>
+          </div>
+          <div className="document-status">
+            <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
+            {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
+            <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
+            <button className="button button-primary" disabled={!selectedPath || !dirty || saving} onClick={guard(() => saveDocument())}>{saving ? 'Saving...' : 'Save'}</button>
+          </div>
+        </header>
+
+        {error && <div className="error-banner"><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
+
+        {!activeWorkspaceId ? (
+          <WelcomePanel
+            workspaceName={workspaceName}
+            workspacePath={workspacePath}
+            onName={setWorkspaceName}
+            onPath={setWorkspacePath}
+            onOpen={guard(addWorkspace)}
+          />
+        ) : (
+          <>
+            <nav className="work-tabs" aria-label="Document views">
+              {([
+                ['editor', 'Editor'],
+                ['chat', 'Chat'],
+                ['review', revision ? `Review (${revisionHunks.length})` : 'Review'],
+                ['log', 'Log'],
+                ['pdf', 'PDF'],
+              ] as Array<[WorkView, string]>).map(([view, label]) => (
+                <button key={view} className={workView === view ? 'active' : ''} onClick={() => setWorkView(view)}>{label}</button>
+              ))}
+            </nav>
+
+            <div className="workspace-grid">
+              <section className="primary-pane">
+                {workView === 'editor' && (
+                  selectedPath ? (
+                    <div className="editor-shell">
+                      <div className="line-gutter" ref={lineGutterRef} aria-hidden="true">
+                        {Array.from({ length: lineCount }, (_, index) => <span key={index}>{index + 1}</span>)}
+                      </div>
+                      <textarea
+                        ref={editorRef}
+                        value={content}
+                        onChange={(event) => setContent(event.target.value)}
+                        onScroll={(event) => {
+                          if (lineGutterRef.current) lineGutterRef.current.scrollTop = event.currentTarget.scrollTop;
+                        }}
+                        onKeyDown={(event) => {
+                          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+                            event.preventDefault();
+                            saveDocument().catch(showError);
+                          }
+                        }}
+                        spellCheck={false}
+                        aria-label="Research document editor"
+                      />
+                      <footer className="editor-status"><span>{documentExtension || 'document'}</span><span>{lineCount} lines · {wordCount.toLocaleString()} words</span></footer>
+                    </div>
+                  ) : <DocumentEmpty onCreate={() => setRailView('files')} />
+                )}
+
+                {workView === 'chat' && (
+                  <ChatPanel
+                    messages={messages}
+                    input={chatInput}
+                    loading={chatLoading}
+                    revising={revising}
+                    selectedPath={selectedPath}
+                    providerId={providerId}
+                    providers={providers}
+                    onInput={setChatInput}
+                    onProvider={setProvider}
+                    onSend={() => sendChat().catch(showError)}
+                    onProposeRevision={() => proposeRevision().catch(showError)}
+                    onStop={stopChat}
+                  />
+                )}
+
+                {workView === 'review' && (
+                  <RevisionPanel
+                    revision={revision}
+                    includedHunks={includedHunks}
+                    busy={saving}
+                    onToggleHunk={toggleHunk}
+                    onIncludeAll={() => setIncludedHunks(new Set(revisionHunks.map((hunk) => hunk.id)))}
+                    onExcludeAll={() => setIncludedHunks(new Set())}
+                    onApply={() => applyRevision().catch(showError)}
+                    onDiscard={() => { setRevision(null); setIncludedHunks(new Set()); }}
+                  />
+                )}
+
+                {workView === 'log' && (
+                  <div className="log-pane">
+                    <header className="pane-header"><div><p className="eyebrow">Process output</p><h2>Compile and run log</h2></div></header>
+                    <pre>{compileLog || 'Compile a TeX document or run a source file to see process output.'}</pre>
+                  </div>
+                )}
+
+                {workView === 'pdf' && (
+                  <div className="mobile-pdf-view">
+                    <PdfPane pdfUrl={pdfUrl} selectedPath={selectedPath} compiling={compiling} engine={compileEngine} onEngineChange={setCompileEngine} onCompile={guard(compileActiveDocument)} />
+                  </div>
+                )}
+              </section>
+
+              <PdfPane
+                pdfUrl={pdfUrl}
+                selectedPath={selectedPath}
+                compiling={compiling}
+                engine={compileEngine}
+                onEngineChange={setCompileEngine}
+                onCompile={guard(compileActiveDocument)}
+              />
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function WelcomePanel({
+  workspaceName,
+  workspacePath,
+  onName,
+  onPath,
+  onOpen,
+}: {
+  workspaceName: string;
+  workspacePath: string;
+  onName: (value: string) => void;
+  onPath: (value: string) => void;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="welcome-panel">
+      <div className="welcome-copy">
+        <p className="eyebrow">Local research, properly instrumented</p>
+        <h2>Your paper stays the center of the room.</h2>
+        <p>Open an existing research folder. Octave will discover supported documents, keep conversations beside them, compile LaTeX, and stage model-proposed edits for review.</p>
+        <ul><li>No upload step</li><li>No proprietary project format</li><li>No write before review</li></ul>
+      </div>
+      <div className="welcome-form">
+        <span className="welcome-number">01</span>
+        <h3>Open a local workspace</h3>
+        <label>Name <small>optional</small><input value={workspaceName} onChange={(event) => onName(event.target.value)} placeholder="Finite-depth geometry" /></label>
+        <label>Absolute folder path<input value={workspacePath} onChange={(event) => onPath(event.target.value)} placeholder="C:\Research\Paper" /></label>
+        <button className="button button-primary full-width" disabled={!workspacePath.trim()} onClick={onOpen}>Open workspace</button>
+        <p>Octave writes only its chat and context state to a hidden `.octave` folder inside the workspace.</p>
+      </div>
+    </div>
+  );
+}
+
+function DocumentEmpty({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="empty-pane document-empty">
+      <Icon name="book" size={30}/>
+      <h3>This workspace has no active document</h3>
+      <p>Create a TeX, Markdown, text, Python, or R file from the Files rail.</p>
+      <button className="button button-secondary" onClick={onCreate}>Open Files</button>
+    </div>
+  );
+}
+
+function pdfEndpoint(workspaceId: string, documentPath: string): string {
+  return `/api/pdf?workspaceId=${encodeURIComponent(workspaceId)}&path=${encodeURIComponent(documentPath)}&t=${Date.now()}`;
+}
+
+async function apiJson<T = Record<string, unknown>>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const data = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || 'Request failed.');
+  return data;
+}

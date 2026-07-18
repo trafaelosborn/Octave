@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { resolveExistingDocumentPath } from './path.js';
+import { resolveExistingDocumentPath, resolvePdfArtifactPath } from './path.js';
 
 export type CompileEngine = 'pdflatex' | 'lualatex' | 'tectonic';
 
@@ -33,6 +33,7 @@ export interface CompileOptions {
 const ENGINES = new Set<CompileEngine>(['pdflatex', 'lualatex', 'tectonic']);
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_PASSES = 3;
+const MAX_COMPILER_OUTPUT_CHARS = 1_000_000;
 
 export async function compileDocument(
   documentPath: string,
@@ -57,17 +58,16 @@ export async function compileDocument(
   if (source.extension !== '.tex') {
     throw new Error('Only .tex documents can be compiled.');
   }
+  const pdf = await resolvePdfArtifactPath(source.relative, workspaceRoot);
 
   const result = await runCompilation(engine, source.absolute, {
     ...options,
     maxPasses,
     timeoutMs,
   });
-  const pdfAbsolute = source.absolute.replace(/\.tex$/i, '.pdf');
-
   let pdfAvailable = false;
   try {
-    await fs.access(pdfAbsolute);
+    await fs.access(pdf.absolute);
     pdfAvailable = true;
   } catch {
     // Compilation failures normally do not produce a PDF.
@@ -76,7 +76,7 @@ export async function compileDocument(
   return {
     ...result,
     pdfAvailable,
-    pdfPath: source.relative.replace(/\.tex$/i, '.pdf'),
+    pdfPath: pdf.relative,
   };
 }
 
@@ -169,12 +169,15 @@ function runSinglePass(
       finish(false, null, `\nTimed out after ${Math.round(options.timeoutMs / 1000)} seconds.`);
     }, options.timeoutMs);
 
-    processHandle.stdout.on('data', (data: Buffer) => {
+    const appendOutput = (data: Buffer): void => {
       log += data.toString();
-    });
-    processHandle.stderr.on('data', (data: Buffer) => {
-      log += data.toString();
-    });
+      if (log.length <= MAX_COMPILER_OUTPUT_CHARS) return;
+      log = `${log.slice(0, MAX_COMPILER_OUTPUT_CHARS)}\n[Compiler output truncated at ${MAX_COMPILER_OUTPUT_CHARS.toLocaleString()} characters.]`;
+      processHandle.kill();
+      finish(false, null);
+    };
+    processHandle.stdout.on('data', appendOutput);
+    processHandle.stderr.on('data', appendOutput);
     processHandle.on('error', (error) => finish(false, null, `\n${error.message}`));
     processHandle.on('close', (code) => finish(code === 0, code));
   });

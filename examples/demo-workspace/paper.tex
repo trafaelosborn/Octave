@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\title{A Small Demonstration of Local Research Workflows}
+\author{Octave Example Workspace}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This short paper exists to make Octave's editor, outline, citation audit, model context, and PDF workflow immediately testable after cloning the repository.
+\end{abstract}
+
+\section{Motivation}
+Research software is most useful when the document remains the source of truth. Octave keeps analysis and conversation adjacent to ordinary files instead of importing them into a proprietary project format.
+
+\section{A bounded context model}
+Let $D$ denote the active document and let $P = \{p_1,\ldots,p_n\}$ be a finite set of explicitly pinned files. A model request receives
+\[
+  C = D \cup \bigcup_{i=1}^{n} p_i,
+\]
+subject to per-file and total context budgets. The model therefore sees deliberate project context, not an unbounded directory scrape.
+
+\subsection{Review before writing}
+Suggested revisions are represented as selectable diff hunks. The document is not modified until the researcher applies the selected proposal.
+
+\section{Related principles}
+The workflow follows the broader local-first principle that users should retain ownership and control of their data \cite{localfirst}.
+
+\section{Conclusion}
+The example is intentionally compact, but it exercises the same code paths used by a real research workspace.
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

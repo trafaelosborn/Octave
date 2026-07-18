@@ -104,6 +104,36 @@ export function resolvePdfPath(documentPath: string, root: string): {
   };
 }
 
+export async function resolvePdfArtifactPath(documentPath: string, root: string): Promise<{
+  source: ResolvedPath;
+  absolute: string;
+  relative: string;
+}> {
+  const source = await resolveExistingDocumentPath(documentPath, root);
+  if (source.extension !== '.tex') {
+    throw new Error('PDF preview is only available for .tex files.');
+  }
+
+  const candidate = source.absolute.replace(/\.tex$/i, '.pdf');
+  const realRoot = await fs.realpath(path.resolve(root));
+  let absolute = candidate;
+
+  try {
+    absolute = await fs.realpath(candidate);
+    assertInsideRoot(absolute, realRoot);
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
+    const realParent = await fs.realpath(path.dirname(candidate));
+    assertInsideRoot(realParent, realRoot);
+  }
+
+  return {
+    source,
+    absolute,
+    relative: source.relative.replace(/\.tex$/i, '.pdf'),
+  };
+}
+
 export async function readDocument(
   documentPath: string,
   root: string,
@@ -124,6 +154,29 @@ export async function readDocument(
   };
 }
 
+export async function writeDocument(
+  documentPath: string,
+  root: string,
+  content: string,
+): Promise<ResolvedPath> {
+  const candidate = resolveSafePath(documentPath, root);
+  const realRoot = await fs.realpath(path.resolve(root));
+
+  try {
+    const realTarget = await fs.realpath(candidate.absolute);
+    assertInsideRoot(realTarget, realRoot);
+    await fs.writeFile(realTarget, content, 'utf8');
+    return { ...candidate, absolute: realTarget };
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
+  }
+
+  const realParent = await fs.realpath(path.dirname(candidate.absolute));
+  assertInsideRoot(realParent, realRoot);
+  await fs.writeFile(candidate.absolute, content, { encoding: 'utf8', flag: 'wx' });
+  return candidate;
+}
+
 export async function listProjectFiles(root: string): Promise<OctaveFile[]> {
   await ensureDirectory(root);
   const resolvedRoot = await fs.realpath(path.resolve(root));
@@ -138,6 +191,10 @@ function assertInsideRoot(target: string, root: string): void {
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error('Path escapes the workspace directory.');
   }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
 }
 
 async function walk(root: string, directory: string, files: OctaveFile[], depth: number): Promise<void> {
