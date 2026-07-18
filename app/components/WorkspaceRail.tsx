@@ -45,6 +45,9 @@ export function WorkspaceRail({
   onWorkspaceName,
   onWorkspacePath,
   onAddWorkspace,
+  onBrowseWorkspace,
+  openingWorkspace,
+  pickingWorkspace,
   onRemoveWorkspace,
   onFileFilter,
   onOpenFile,
@@ -85,6 +88,9 @@ export function WorkspaceRail({
   onWorkspaceName: (value: string) => void;
   onWorkspacePath: (value: string) => void;
   onAddWorkspace: () => void;
+  onBrowseWorkspace: () => void;
+  openingWorkspace: boolean;
+  pickingWorkspace: boolean;
   onRemoveWorkspace: (id: string) => void;
   onFileFilter: (value: string) => void;
   onOpenFile: (path: string, line?: number) => void;
@@ -124,8 +130,8 @@ export function WorkspaceRail({
           {workspaceFormOpen && (
             <div className="workspace-form">
               <input value={workspaceName} onChange={(event) => onWorkspaceName(event.target.value)} placeholder="Workspace name (optional)" />
-              <input value={workspacePath} onChange={(event) => onWorkspacePath(event.target.value)} placeholder="C:\Research\Paper" />
-              <button className="button button-primary full-width" disabled={!workspacePath.trim()} onClick={onAddWorkspace}>Open local folder</button>
+              <div className="path-picker"><input value={workspacePath} onChange={(event) => onWorkspacePath(event.target.value)} placeholder="Choose a folder or paste its path" /><button className="button button-secondary" disabled={pickingWorkspace} onClick={onBrowseWorkspace}>{pickingWorkspace ? 'Choosing…' : 'Browse…'}</button></div>
+              <button className="button button-primary full-width" disabled={!workspacePath.trim() || openingWorkspace} onClick={onAddWorkspace}>{openingWorkspace ? 'Opening…' : 'Open local folder'}</button>
               {workspaces.length > 0 && (
                 <div className="workspace-manage-list">
                   {workspaces.map((workspace) => (

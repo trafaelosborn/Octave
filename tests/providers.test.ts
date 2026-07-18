@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider } from '../src/providers/anthropic.js';
 import { OllamaProvider } from '../src/providers/ollama.js';
+import { OpenAIProvider, XAIProvider } from '../src/providers/openai-compatible.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -47,6 +48,21 @@ describe('provider streaming', () => {
       system: 'Be precise.',
       messages: [{ role: 'user', content: 'Hello' }],
     });
+  });
+
+  it.each([
+    ['OpenAI', new OpenAIProvider({ apiKey: 'test', baseUrl: 'https://openai.test', model: 'test' })],
+    ['xAI', new XAIProvider({ apiKey: 'test', baseUrl: 'https://xai.test', model: 'test' })],
+  ])('parses %s chat-completion streaming deltas', async (_name, provider) => {
+    const body = streamFrom([
+      'data: {"choices":[{"delta":{"content":"research "}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"answer"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 200 })));
+    const chunks: string[] = [];
+    for await (const chunk of provider.streamChat([{ role: 'user', content: 'Hello' }])) chunks.push(chunk);
+    expect(chunks.join('')).toBe('research answer');
   });
 });
 

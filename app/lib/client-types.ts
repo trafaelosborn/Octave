@@ -39,10 +39,12 @@ export interface ChatSessionMeta {
 }
 
 export interface ProviderStatus {
-  id: 'ollama' | 'anthropic' | 'demo';
+  id: 'ollama' | 'anthropic' | 'openai' | 'xai' | 'demo';
   name: string;
   available: boolean;
   local: boolean;
+  models: Array<{ id: string; name?: string }>;
+  setupHint?: string;
 }
 
 export interface SearchResult {
