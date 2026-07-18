@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { readDocument, resolveExistingDocumentPath, resolvePdfArtifactPath, writeDocument } from '@trafaelosborn/octave/core';
+import { readDocument, resolveExistingResearchPath, resolvePdfArtifactPath, writeDocument } from '@trafaelosborn/octave/core';
 import { getWorkspace, updateLastDocument } from '../../lib/workspaces';
 import { jsonError, readJsonBody } from '../../lib/http';
 
@@ -13,7 +13,7 @@ export async function GET(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const workspace = await getWorkspace(url.searchParams.get('workspaceId'));
     const document = await readDocument(url.searchParams.get('path') ?? '', workspace.rootPath, MAX_DOCUMENT_CHARS);
-    const resolved = await resolveExistingDocumentPath(document.path, workspace.rootPath);
+    const resolved = await resolveExistingResearchPath(document.path, workspace.rootPath);
     const stat = await fs.stat(resolved.absolute);
     const pdfAvailable = resolved.extension === '.tex'
       ? await safePdfAvailable(document.path, workspace.rootPath)
@@ -24,6 +24,8 @@ export async function GET(request: Request): Promise<Response> {
       path: document.path,
       extension: resolved.extension,
       content: document.content,
+      readOnly: !document.editable,
+      extractionWarnings: document.warnings,
       truncated: document.truncated,
       size: stat.size,
       mtimeMs: stat.mtimeMs,

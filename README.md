@@ -9,7 +9,8 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 ## What it does
 
 - Opens existing local folders without importing or converting them.
-- Edits TeX, BibTeX, Markdown, text, Python, R, and LaTeX support files.
+- Edits TeX, BibTeX, Markdown, structured text, Python, R, JavaScript, TypeScript, and LaTeX support files.
+- Extracts read-only research context from PDF, Word, Excel, PowerPoint, OpenDocument, and RTF files with explicit limits and warnings.
 - Keeps research chats at project scope while attaching the active document and pinned files at send time.
 - Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
@@ -124,7 +125,7 @@ src/
   cli.ts       command-line interface over the reusable core
 ```
 
-Octave keeps conversation scope intentionally simple: a chat belongs to a workspace. The currently open document and pinned files are bounded context attached at send time, not separate chat types.
+Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context.
 
 ## Privacy and safety
 
@@ -135,6 +136,8 @@ Octave keeps conversation scope intentionally simple: a chat belongs to a worksp
 - Executable source is limited to Python and R, runs without a shell, and has a timeout.
 - Python and R execution is a convenience feature, not a sandbox. Run only code you trust.
 - Generated chat, context, build, and dependency directories are excluded from workspace discovery.
+
+See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research formats, extraction behavior, and limits.
 
 See [SECURITY.md](SECURITY.md) for reporting and boundary details.
 

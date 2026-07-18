@@ -42,6 +42,8 @@ export default function OctavePage() {
   const [content, setContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
   const [documentExtension, setDocumentExtension] = useState('');
+  const [documentReadOnly, setDocumentReadOnly] = useState(false);
+  const [extractionWarnings, setExtractionWarnings] = useState<string[]>([]);
   const [newDocumentPath, setNewDocumentPath] = useState('paper.tex');
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
   const [chats, setChats] = useState<ChatSessionMeta[]>([]);
@@ -223,9 +225,13 @@ export default function OctavePage() {
       extension: string;
       content: string;
       pdfAvailable: boolean;
+      readOnly: boolean;
+      extractionWarnings: string[];
     }>(`/api/document?workspaceId=${encodeURIComponent(workspaceId)}&path=${encodeURIComponent(documentPath)}`);
     setSelectedPath(data.path);
     setDocumentExtension(data.extension);
+    setDocumentReadOnly(data.readOnly);
+    setExtractionWarnings(data.extractionWarnings);
     setContent(data.content);
     setSavedContent(data.content);
     setPdfUrl(data.pdfAvailable ? pdfEndpoint(workspaceId, data.path) : '');
@@ -239,7 +245,7 @@ export default function OctavePage() {
   }
 
   async function saveDocument(nextContent = content): Promise<void> {
-    if (!activeWorkspaceId || !selectedPath) return;
+    if (!activeWorkspaceId || !selectedPath || documentReadOnly) return;
     setSaving(true);
     try {
       await apiJson('/api/document', {
@@ -545,6 +551,8 @@ export default function OctavePage() {
   function clearDocument(): void {
     setSelectedPath('');
     setDocumentExtension('');
+    setDocumentReadOnly(false);
+    setExtractionWarnings([]);
     setContent('');
     setSavedContent('');
     setPdfUrl('');
@@ -628,7 +636,7 @@ export default function OctavePage() {
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
             <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
-            <button className="button button-primary" disabled={!selectedPath || !dirty || saving} onClick={guard(() => saveDocument())}>{saving ? 'Saving...' : 'Save'}</button>
+            <button className="button button-primary" disabled={!selectedPath || !dirty || saving || documentReadOnly} onClick={guard(() => saveDocument())}>{documentReadOnly ? 'Read only' : saving ? 'Saving...' : 'Save'}</button>
           </div>
         </header>
 
@@ -681,9 +689,11 @@ export default function OctavePage() {
                           }
                         }}
                         spellCheck={false}
+                        readOnly={documentReadOnly}
                         aria-label="Research document editor"
                       />
-                      <footer className="editor-status"><span>{documentExtension || 'document'}</span><span>{lineCount} lines · {wordCount.toLocaleString()} words</span></footer>
+                      <footer className="editor-status"><span>{documentExtension || 'document'}{documentReadOnly ? ' · extracted preview' : ''}</span><span>{lineCount} lines · {wordCount.toLocaleString()} words</span></footer>
+                      {extractionWarnings.length > 0 && <div className="extraction-warning" role="status">{extractionWarnings.join(' ')}</div>}
                     </div>
                   ) : <DocumentEmpty onCreate={() => setRailView('files')} />
                 )}
@@ -694,6 +704,7 @@ export default function OctavePage() {
                     input={chatInput}
                     loading={chatLoading}
                     revising={revising}
+                    canRevise={!documentReadOnly}
                     selectedPath={selectedPath}
                     scope={chatScope}
                     documentPath={chatDocumentPath || selectedPath}

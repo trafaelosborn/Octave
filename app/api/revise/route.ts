@@ -23,6 +23,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const workspace = await getWorkspace(body.workspaceId);
     const document = await readDocument(body.path ?? '', workspace.rootPath, MAX_REVISION_CHARS);
+    if (!document.editable) throw new Error('Extracted document previews are read-only and cannot be revised in place.');
     if (document.truncated) throw new Error('Document is too large for the revision workflow.');
 
     const providerId = body.provider ?? process.env.OCTAVE_DEFAULT_PROVIDER ?? 'ollama';

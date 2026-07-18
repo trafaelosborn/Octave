@@ -13,6 +13,7 @@ export interface OctaveFile {
   extension: string;
   size: number;
   mtimeMs: number;
+  editable: boolean;
 }
 
 export interface ChatMessage {

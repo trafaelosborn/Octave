@@ -1,15 +1,19 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {
+  extractDocument,
+  IMAGE_DOCUMENT_EXTENSIONS,
+  OFFICE_DOCUMENT_EXTENSIONS,
+  TEXT_DOCUMENT_EXTENSIONS,
+  type ExtractedDocumentKind,
+} from './extract.js';
 
-export const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
-  '.tex',
-  '.bib',
-  '.md',
-  '.txt',
-  '.sty',
-  '.cls',
-  '.py',
-  '.r',
+export const ALLOWED_DOCUMENT_EXTENSIONS = TEXT_DOCUMENT_EXTENSIONS;
+export const SUPPORTED_RESEARCH_EXTENSIONS = new Set([
+  ...TEXT_DOCUMENT_EXTENSIONS,
+  ...OFFICE_DOCUMENT_EXTENSIONS,
+  ...IMAGE_DOCUMENT_EXTENSIONS,
+  '.pdf',
 ]);
 
 const IGNORED_DIRECTORIES = new Set([
@@ -30,6 +34,7 @@ export interface OctaveFile {
   extension: string;
   size: number;
   mtimeMs: number;
+  editable: boolean;
 }
 
 export interface ResolvedPath {
@@ -42,6 +47,11 @@ export interface DocumentContent {
   path: string;
   content: string;
   truncated: boolean;
+  extension: string;
+  kind: ExtractedDocumentKind;
+  warnings: string[];
+  sourceBytes: number;
+  editable: boolean;
 }
 
 export async function ensureDirectory(directory: string): Promise<void> {
@@ -49,6 +59,14 @@ export async function ensureDirectory(directory: string): Promise<void> {
 }
 
 export function resolveSafePath(input: string, root: string): ResolvedPath {
+  return resolveSafePathForExtensions(input, root, ALLOWED_DOCUMENT_EXTENSIONS);
+}
+
+export function resolveSafeResearchPath(input: string, root: string): ResolvedPath {
+  return resolveSafePathForExtensions(input, root, SUPPORTED_RESEARCH_EXTENSIONS);
+}
+
+function resolveSafePathForExtensions(input: string, root: string, extensions: Set<string>): ResolvedPath {
   const clean = String(input || '')
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')
@@ -67,7 +85,7 @@ export function resolveSafePath(input: string, root: string): ResolvedPath {
   const relative = path.relative(resolvedRoot, absolute).replace(/\\/g, '/');
   const extension = path.extname(relative).toLowerCase();
 
-  if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) {
+  if (!extensions.has(extension)) {
     throw new Error(`Unsupported file type: ${extension || '(none)'}`);
   }
 
@@ -85,6 +103,14 @@ export async function resolveExistingDocumentPath(input: string, root: string): 
     relative: candidate.relative,
     extension: candidate.extension,
   };
+}
+
+export async function resolveExistingResearchPath(input: string, root: string): Promise<ResolvedPath> {
+  const candidate = resolveSafeResearchPath(input, root);
+  const realRoot = await fs.realpath(path.resolve(root));
+  const realTarget = await fs.realpath(candidate.absolute);
+  assertInsideRoot(realTarget, realRoot);
+  return { ...candidate, absolute: realTarget };
 }
 
 export function resolvePdfPath(documentPath: string, root: string): {
@@ -143,14 +169,18 @@ export async function readDocument(
     throw new Error('maxChars must be a positive integer.');
   }
 
-  const resolved = await resolveExistingDocumentPath(documentPath, root);
-  const content = await fs.readFile(resolved.absolute, 'utf8');
-  const truncated = content.length > maxChars;
+  const resolved = await resolveExistingResearchPath(documentPath, root);
+  const extracted = await extractDocument(resolved.absolute, { maxChars });
 
   return {
     path: resolved.relative,
-    content: truncated ? content.slice(0, maxChars) : content,
-    truncated,
+    content: extracted.content,
+    truncated: extracted.truncated,
+    extension: resolved.extension,
+    kind: extracted.kind,
+    warnings: extracted.warnings,
+    sourceBytes: extracted.sourceBytes,
+    editable: ALLOWED_DOCUMENT_EXTENSIONS.has(resolved.extension),
   };
 }
 
@@ -219,7 +249,7 @@ async function walk(root: string, directory: string, files: OctaveFile[], depth:
 
     if (!entry.isFile()) continue;
     const extension = path.extname(entry.name).toLowerCase();
-    if (!ALLOWED_DOCUMENT_EXTENSIONS.has(extension)) continue;
+    if (!SUPPORTED_RESEARCH_EXTENSIONS.has(extension)) continue;
 
     try {
       const stat = await fs.stat(absolute);
@@ -229,6 +259,7 @@ async function walk(root: string, directory: string, files: OctaveFile[], depth:
         extension,
         size: stat.size,
         mtimeMs: stat.mtimeMs,
+        editable: ALLOWED_DOCUMENT_EXTENSIONS.has(extension),
       });
     } catch {
       // A file can disappear between readdir and stat. Skip it and continue.

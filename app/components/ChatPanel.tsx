@@ -10,6 +10,7 @@ export function ChatPanel({
   input,
   loading,
   revising,
+  canRevise,
   selectedPath,
   scope,
   documentPath,
@@ -28,6 +29,7 @@ export function ChatPanel({
   input: string;
   loading: boolean;
   revising: boolean;
+  canRevise: boolean;
   selectedPath: string;
   scope: ChatScope;
   documentPath: string;
@@ -128,7 +130,7 @@ export function ChatPanel({
             <button
               className="button button-quiet"
               onClick={onProposeRevision}
-              disabled={!selectedPath || !input.trim() || loading || revising}
+              disabled={!canRevise || !selectedPath || !input.trim() || loading || revising}
               title="Generate a complete document proposal, then review changes before writing"
             >
               <Icon name="code" size={15}/>{revising ? 'Drafting...' : 'Propose edit'}

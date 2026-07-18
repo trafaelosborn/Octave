@@ -42,7 +42,8 @@ describe('workspace paths', () => {
 
   it('lists only supported research files', async () => {
     const files = await listProjectFiles(workspaceRoot);
-    expect(files.map((file) => file.path)).toEqual(['paper.tex', 'notes/idea.md']);
+    expect(files.map((file) => file.path)).toEqual(['paper.tex', 'notes/idea.md', 'image.png']);
+    expect(files.find((file) => file.path === 'image.png')?.editable).toBe(false);
   });
 
   it('reads bounded document content', async () => {

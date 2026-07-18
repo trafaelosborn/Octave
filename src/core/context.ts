@@ -36,9 +36,9 @@ export async function buildWorkspaceContext(options: ContextOptions): Promise<st
       const document = await readDocument(documentPath, options.workspaceRoot, remaining);
       const label = documentPath === options.currentDocumentPath ? 'current document' : 'pinned file';
       parts.push([
-        `<document path="${escapeAttribute(document.path)}" role="${label}">`,
+        `<document path="${escapeAttribute(document.path)}" role="${label}" format="${escapeAttribute(document.kind)}">`,
         document.content,
-        document.truncated ? '\n[truncated by context limit]' : '',
+        ...document.warnings.map((warning) => `\n[extraction warning: ${warning}]`),
         '</document>',
       ].join('\n'));
       remaining -= document.content.length;

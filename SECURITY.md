@@ -6,6 +6,8 @@ Octave operates on local research files, so file boundaries and credentials are 
 
 Document paths must be relative to a selected workspace. Octave rejects absolute paths, unsupported extensions, null bytes, and directory traversal. Existing source and PDF artifact paths are resolved through the operating system before they are read or compiled, which prevents a symbolic link inside the workspace from silently targeting a file outside it.
 
+Binary research formats are extracted into read-only previews. Extraction enforces source-size, decompression-size, archive-entry, timeout, and output-character limits. Octave does not enable OCR implicitly and does not write extracted text back over PDF, Office, OpenDocument, RTF, or image files.
+
 The development and production server scripts bind to `127.0.0.1` by default. Octave's API is designed for a single-user local workstation and does not implement network authentication. Do not expose it on a public or untrusted network.
 
 Python and R execution is not a sandbox. Octave validates the selected script path, invokes a fixed interpreter without a shell, bounds captured output, and applies a timeout, but the script still runs with the permissions of the Octave process. Run only code you trust.

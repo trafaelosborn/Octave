@@ -19,6 +19,7 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Remaining hardening: expose rename/delete controls in the UI, preserve interrupted streaming responses where useful, and add an export/import path.
 
 3. **File attachments**
+   - Shared format extraction is implemented; per-message attachment persistence and composer UI remain.
    - Attach bounded local files to an individual chat turn without permanently pinning them.
    - Enforce size, type, and workspace-boundary limits.
 
