@@ -215,7 +215,7 @@ export function WorkspaceRail({
                 {chats.map((chat) => (
                   <button key={chat.id} className={activeChatId === chat.id ? 'selected' : ''} onClick={() => onOpenChat(chat.id)}>
                     <span>{chat.title}</span>
-                    <small>{chat.lastDocumentPath || 'Workspace conversation'} · {timeAgo(chat.updatedAt)}</small>
+                    <small>{chat.scope === 'document' ? chat.documentPath : 'Project conversation'} · {timeAgo(chat.updatedAt)}</small>
                   </button>
                 ))}
                 {chats.length === 0 && <RailEmpty text="Conversations remain inside this workspace." />}

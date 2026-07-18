@@ -21,12 +21,16 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ChatScope = 'workspace' | 'document';
+
 export interface ChatSession {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  scope: ChatScope;
+  documentPath?: string;
   lastDocumentPath?: string;
 }
 
@@ -35,6 +39,8 @@ export interface ChatSessionMeta {
   title: string;
   createdAt: string;
   updatedAt: string;
+  scope: ChatScope;
+  documentPath?: string;
   lastDocumentPath?: string;
 }
 

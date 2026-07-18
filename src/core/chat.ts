@@ -6,12 +6,16 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ChatScope = 'workspace' | 'document';
+
 export interface ChatSession {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  scope: ChatScope;
+  documentPath?: string;
   lastDocumentPath?: string;
 }
 
@@ -20,18 +24,30 @@ export interface ChatSessionMeta {
   title: string;
   createdAt: string;
   updatedAt: string;
+  scope: ChatScope;
+  documentPath?: string;
   lastDocumentPath?: string;
 }
 
-export function createNewChatSession(title = 'New chat'): ChatSession {
+export function createNewChatSession(
+  title = 'New chat',
+  scope: ChatScope = 'workspace',
+  documentPath?: string,
+): ChatSession {
+  if (scope === 'document' && !documentPath?.trim()) {
+    throw new Error('Document chats require a document path.');
+  }
   const now = new Date().toISOString();
-  return {
+  const session: ChatSession = {
     id: randomUUID(),
     title: title.trim() || 'New chat',
     createdAt: now,
     updatedAt: now,
     messages: [],
+    scope,
   };
+  if (documentPath?.trim()) session.documentPath = documentPath.trim();
+  return session;
 }
 
 export function generateChatTitle(firstUserMessage: string): string {
@@ -51,6 +67,9 @@ export function isChatSession(value: unknown): value is ChatSession {
     typeof session.updatedAt === 'string' &&
     Array.isArray(session.messages) &&
     session.messages.every(isChatMessage) &&
+    (session.scope === 'workspace' || session.scope === 'document') &&
+    (session.documentPath === undefined || typeof session.documentPath === 'string') &&
+    (session.scope !== 'document' || Boolean(session.documentPath?.trim())) &&
     (session.lastDocumentPath === undefined || typeof session.lastDocumentPath === 'string')
   );
 }

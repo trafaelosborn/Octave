@@ -150,9 +150,9 @@ npm pack --dry-run
 
 ## Roadmap
 
+- Doris feature-convergence work is tracked in [docs/DORIS_CONVERGENCE_ROADMAP.md](docs/DORIS_CONVERGENCE_ROADMAP.md).
 - Richer bibliography workflows
 - Desktop packaging
-- Cross-platform folder picker integration
 
 This project is not affiliated with GNU Octave. The name comes from its origin as a research workspace within Doris.
 

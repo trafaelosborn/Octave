@@ -36,4 +36,10 @@ describe('workspace chat storage', () => {
     await expect(loadChat(workspaceRoot, '../outside')).rejects.toThrow('Invalid chat ID');
     await expect(loadChat(workspaceRoot, 'folder/chat')).rejects.toThrow('Invalid chat ID');
   });
+
+  it('persists chat scope and its bound document in history metadata', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'document', documentPath: 'proof.tex' });
+    expect(await loadChat(workspaceRoot, chat.id)).toMatchObject({ scope: 'document', documentPath: 'proof.tex' });
+    expect(await listChats(workspaceRoot)).toMatchObject([{ scope: 'document', documentPath: 'proof.tex' }]);
+  });
 });

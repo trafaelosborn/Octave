@@ -31,7 +31,7 @@ describe('chat engine', () => {
   });
 
   it('streams document-aware chat and persists both messages', async () => {
-    const chat = await createChat(workspaceRoot);
+    const chat = await createChat(workspaceRoot, { scope: 'document', documentPath: 'paper.tex' });
     const provider = new RecordingProvider();
     const deltas: string[] = [];
 
@@ -49,6 +49,33 @@ describe('chat engine', () => {
     expect(provider.messages[0]?.content).toContain('The invariant is monotone.');
     expect(provider.messages.at(-1)).toEqual({ role: 'user', content: 'What does the result say?' });
     expect((await loadChat(workspaceRoot, chat.id))?.lastDocumentPath).toBe('paper.tex');
+  });
+
+  it('keeps workspace chats independent of the open document', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'workspace' });
+    const provider = new RecordingProvider();
+
+    await sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Discuss the project.',
+      provider,
+      currentDocumentPath: 'paper.tex',
+    });
+
+    expect(provider.messages[0]?.content).toContain('No document content is attached');
+    expect((await loadChat(workspaceRoot, chat.id))?.lastDocumentPath).toBeUndefined();
+  });
+
+  it('prevents document chats from changing their bound document', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'document', documentPath: 'paper.tex' });
+    await expect(sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Switch documents.',
+      provider: new RecordingProvider(),
+      currentDocumentPath: 'other.tex',
+    })).rejects.toThrow('cannot switch');
   });
 
   it('refuses to send against an unknown chat', async () => {

@@ -330,6 +330,10 @@ button { border: 0; }
 .chat-context-strip > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .provider-picker { align-items: center; display: flex; gap: 5px; }
 .provider-picker select { border: 0; color: var(--muted); outline: 0; padding: 5px; }
+.chat-controls { align-items: center; display: flex; gap: 7px; }
+.scope-picker { align-items: center; display: flex; gap: 5px; }
+.scope-picker span { color: var(--faint); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.scope-picker select { background: transparent; border: 0; color: var(--muted); font-size: 11px; outline: 0; }
 .provider-dot { background: #bd7d7d; border-radius: 50%; height: 6px; width: 6px; }
 .provider-dot.online { background: #54a98e; box-shadow: 0 0 0 3px rgb(84 169 142 / 12%); }
 .message-list { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 24px 40px; }
