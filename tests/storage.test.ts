@@ -61,4 +61,26 @@ describe('workspace chat storage', () => {
     await expect(appendMessage(workspaceRoot, chat.id, 'assistant', 'No attachment.', attachments))
       .rejects.toThrow('Assistant messages');
   });
+
+  it('persists provider attribution on assistant responses', async () => {
+    const chat = await createChat(workspaceRoot);
+    const updated = await appendMessage(
+      workspaceRoot,
+      chat.id,
+      'assistant',
+      'A saved review candidate.',
+      undefined,
+      { providerId: 'xai', modelId: 'grok-test' },
+    );
+
+    expect(updated.messages[0]).toMatchObject({ providerId: 'xai', modelId: 'grok-test' });
+    await expect(appendMessage(
+      workspaceRoot,
+      chat.id,
+      'user',
+      'No attribution.',
+      undefined,
+      { providerId: 'xai' },
+    )).rejects.toThrow('Only assistant');
+  });
 });

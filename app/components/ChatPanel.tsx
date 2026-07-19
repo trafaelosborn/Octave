@@ -9,6 +9,8 @@ const MAX_CHAT_ATTACHMENTS = 8;
 
 export function ChatPanel({
   messages,
+  savedReviewMessageIndexes,
+  savingReviewMessageTs,
   files,
   attachmentPaths,
   input,
@@ -27,11 +29,14 @@ export function ChatPanel({
   onScope,
   onToggleAttachment,
   onRemoveAttachment,
+  onSaveReview,
   onSend,
   onProposeRevision,
   onStop,
 }: {
   messages: ChatMessage[];
+  savedReviewMessageIndexes: number[];
+  savingReviewMessageTs: string;
   files: OctaveFile[];
   attachmentPaths: string[];
   input: string;
@@ -50,6 +55,7 @@ export function ChatPanel({
   onScope: (scope: ChatScope) => void;
   onToggleAttachment: (path: string) => void;
   onRemoveAttachment: (path: string) => void;
+  onSaveReview: (messageIndex: number) => void;
   onSend: () => void;
   onProposeRevision: () => void;
   onStop: () => void;
@@ -119,7 +125,24 @@ export function ChatPanel({
           <article className={`message message-${message.role}`} key={`${message.ts}-${index}`}>
             <div className="message-avatar">{message.role === 'user' ? 'You' : 'O'}</div>
             <div className="message-body">
-              <header><span>{message.role === 'user' ? 'You' : 'Octave'}</span><time>{formatTime(message.ts)}</time></header>
+              <header>
+                <span>{message.role === 'user' ? 'You' : 'Octave'}</span>
+                <time>{formatTime(message.ts)}</time>
+                {message.role === 'assistant' && message.content && (!loading || index < messages.length - 1) && (
+                  <button
+                    type="button"
+                    className="message-save-review"
+                    disabled={savingReviewMessageTs === message.ts || savedReviewMessageIndexes.includes(index)}
+                    onClick={() => onSaveReview(index)}
+                    title="Save this response as a durable Markdown review memo"
+                  >
+                    <Icon name="book" size={12}/>
+                    {savedReviewMessageIndexes.includes(index)
+                      ? 'Saved review'
+                      : savingReviewMessageTs === message.ts ? 'Saving...' : 'Save review'}
+                  </button>
+                )}
+              </header>
               {message.role === 'assistant'
                 ? message.content
                   ? <MarkdownMessage content={message.content}/>

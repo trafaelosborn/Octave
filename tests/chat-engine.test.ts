@@ -44,10 +44,12 @@ describe('chat engine', () => {
       userMessage: 'What does the result say?',
       provider,
       currentDocumentPath: 'paper.tex',
+      model: 'recording-model',
     }, (delta) => deltas.push(delta));
 
     expect(deltas.join('')).toBe('First response');
     expect(result.assistantMessage.content).toBe('First response');
+    expect(result.assistantMessage).toMatchObject({ providerId: 'recording', modelId: 'recording-model' });
     expect(result.updatedSession.messages).toHaveLength(2);
     expect(provider.messages[0]?.content).toContain('The invariant is monotone.');
     expect(provider.messages.at(-1)).toEqual({ role: 'user', content: 'What does the result say?' });

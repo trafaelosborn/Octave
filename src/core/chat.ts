@@ -20,6 +20,13 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   attachments?: ChatAttachment[];
+  providerId?: string;
+  modelId?: string;
+}
+
+export interface ChatMessageAttribution {
+  providerId: string;
+  modelId?: string;
 }
 
 export type ChatScope = 'workspace' | 'document';
@@ -100,6 +107,12 @@ function isChatMessage(value: unknown): value is ChatMessage {
     (message.attachments === undefined || (
       message.role === 'user' &&
       isValidAttachmentSet(message.attachments)
+    )) &&
+    (message.providerId === undefined || (
+      message.role === 'assistant' && typeof message.providerId === 'string' && Boolean(message.providerId.trim())
+    )) &&
+    (message.modelId === undefined || (
+      message.role === 'assistant' && typeof message.modelId === 'string' && Boolean(message.modelId.trim())
     ))
   );
 }

@@ -69,4 +69,24 @@ describe('chat model', () => {
     };
     expect(isChatSession(session)).toBe(false);
   });
+
+  it('accepts provider attribution only on assistant messages', () => {
+    const session = createNewChatSession();
+    session.messages.push({
+      ts: new Date().toISOString(),
+      role: 'assistant',
+      content: 'Review complete.',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+    });
+    expect(isChatSession(session)).toBe(true);
+
+    session.messages[0] = {
+      ts: new Date().toISOString(),
+      role: 'user',
+      content: 'Invalid attribution.',
+      providerId: 'openai',
+    };
+    expect(isChatSession(session)).toBe(false);
+  });
 });

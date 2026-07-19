@@ -24,9 +24,10 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Each turn is limited to eight files, 25 MB of combined source data, and 60,000 extracted characters; existing type and workspace-boundary checks still apply.
    - Images currently provide metadata and a vision-capability warning until provider capabilities are declared explicitly.
 
-4. **Saved review memos**
-   - Persist serious review outputs as named Markdown artifacts separate from ordinary chat.
-   - Link reviews to their source document and chat session.
+4. **Saved review memos** — implemented
+   - Completed assistant responses can be saved as named Markdown artifacts under `.octave/reviews/`.
+   - Reviews preserve links to their exact source chat turn, document scope, and available provider/model attribution.
+   - The Reviews rail reopens memos in a dedicated reader and supports explicit deletion.
 
 5. **Line-level revision decisions**
    - Accept or reject individual changed lines within a proposed hunk while keeping the resulting document valid.

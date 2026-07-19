@@ -5,6 +5,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { Icon } from './components/Icon';
 import { PdfPane } from './components/PdfPane';
 import { RevisionPanel } from './components/RevisionPanel';
+import { ReviewMemoPanel } from './components/ReviewMemoPanel';
 import { WorkspaceRail } from './components/WorkspaceRail';
 import type {
   ChatAttachment,
@@ -17,6 +18,8 @@ import type {
   OutlineItem,
   ProviderStatus,
   RailView,
+  ReviewMemo,
+  ReviewMemoMeta,
   RevisionPreview,
   SearchResult,
   WorkView,
@@ -48,6 +51,8 @@ export default function OctavePage() {
   const [newDocumentPath, setNewDocumentPath] = useState('paper.tex');
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
   const [chats, setChats] = useState<ChatSessionMeta[]>([]);
+  const [reviews, setReviews] = useState<ReviewMemoMeta[]>([]);
+  const [activeReview, setActiveReview] = useState<ReviewMemo | null>(null);
   const [activeChatId, setActiveChatId] = useState('');
   const [chatScope, setChatScope] = useState<ChatScope>('document');
   const [chatDocumentPath, setChatDocumentPath] = useState('');
@@ -80,6 +85,8 @@ export default function OctavePage() {
   const [running, setRunning] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [revising, setRevising] = useState(false);
+  const [savingReviewMessageTs, setSavingReviewMessageTs] = useState('');
+  const [deletingReview, setDeletingReview] = useState(false);
   const [searching, setSearching] = useState(false);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -96,6 +103,10 @@ export default function OctavePage() {
     [revision],
   );
   const canRun = documentExtension === '.py' || documentExtension === '.r';
+  const savedReviewMessageIndexes = useMemo(
+    () => reviews.filter((review) => review.sourceChatId === activeChatId).map((review) => review.sourceMessageIndex),
+    [activeChatId, reviews],
+  );
 
   useEffect(() => {
     bootstrap().catch(showError).finally(() => setBooting(false));
@@ -136,16 +147,19 @@ export default function OctavePage() {
     setCompileLog('');
     setRevision(null);
     setAttachmentPaths([]);
+    setActiveReview(null);
 
-    const [fileData, contextData, chatData, citationData] = await Promise.all([
+    const [fileData, contextData, chatData, reviewData, citationData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ pinnedPaths: string[] }>(`/api/context?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<{ reviews: ReviewMemoMeta[] }>(`/api/reviews?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(workspaceId)}`),
     ]);
     setFiles(fileData.files);
     setPinnedPaths(contextData.pinnedPaths);
     setChats(chatData.chats);
+    setReviews(reviewData.reviews);
     setCitations(citationData);
 
     const workspace = knownWorkspaces.find((candidate) => candidate.id === workspaceId) ?? fileData.workspace;
@@ -210,6 +224,8 @@ export default function OctavePage() {
         clearDocument();
         setFiles([]);
         setChats([]);
+        setReviews([]);
+        setActiveReview(null);
         setAttachmentPaths([]);
         setWorkspaceFormOpen(true);
       }
@@ -376,6 +392,61 @@ export default function OctavePage() {
     if (!activeWorkspaceId) return;
     const data = await apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
     setChats(data.chats);
+  }
+
+  async function refreshReviews(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ reviews: ReviewMemoMeta[] }>(`/api/reviews?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+    setReviews(data.reviews);
+  }
+
+  async function loadReviewMemo(reviewId: string): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ review: ReviewMemo | null }>(`/api/reviews?workspaceId=${encodeURIComponent(activeWorkspaceId)}&reviewId=${encodeURIComponent(reviewId)}`);
+    if (!data.review) throw new Error('Review memo was not found.');
+    setActiveReview(data.review);
+    setWorkView('memo');
+    setRailOpen(false);
+  }
+
+  async function saveReviewMemo(messageIndex: number): Promise<void> {
+    if (!activeWorkspaceId || !activeChatId) throw new Error('Open a saved chat before creating a review memo.');
+    const message = messages[messageIndex];
+    if (!message || message.role !== 'assistant' || !message.content.trim()) {
+      throw new Error('Only a completed assistant response can be saved as a review.');
+    }
+    setSavingReviewMessageTs(message.ts);
+    try {
+      await apiJson<{ review: ReviewMemo; created: boolean }>('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: activeWorkspaceId,
+          chatId: activeChatId,
+          messageIndex,
+        }),
+      });
+      await refreshReviews();
+      setRailView('reviews');
+      setError('');
+    } finally {
+      setSavingReviewMessageTs('');
+    }
+  }
+
+  async function deleteReviewMemo(review: ReviewMemo): Promise<void> {
+    if (!activeWorkspaceId) return;
+    if (!window.confirm(`Delete the saved review "${review.title}"? The Markdown artifact will be removed.`)) return;
+    setDeletingReview(true);
+    try {
+      await apiJson(`/api/reviews?workspaceId=${encodeURIComponent(activeWorkspaceId)}&reviewId=${encodeURIComponent(review.id)}`, { method: 'DELETE' });
+      setActiveReview(null);
+      setWorkView(activeChatId ? 'chat' : 'editor');
+      await refreshReviews();
+      setError('');
+    } finally {
+      setDeletingReview(false);
+    }
   }
 
   async function loadChat(chatId: string, workspaceId = activeWorkspaceId, show = true): Promise<void> {
@@ -618,6 +689,8 @@ export default function OctavePage() {
         searching={searching}
         chats={chats}
         activeChatId={activeChatId}
+        reviews={reviews}
+        activeReviewId={activeReview?.id ?? ''}
         outline={outline}
         citations={citations}
         newDocumentPath={newDocumentPath}
@@ -640,6 +713,7 @@ export default function OctavePage() {
         onOpenSearchResult={(result) => loadDocument(result.path, activeWorkspaceId, result.line).catch(showError)}
         onNewChat={() => createNewChat().catch(showError)}
         onOpenChat={(chatId) => loadChat(chatId).catch(showError)}
+        onOpenReview={(reviewId) => loadReviewMemo(reviewId).catch(showError)}
         onOutlineItem={openOutlineItem}
         onRefreshCitations={guard(refreshCitations)}
         onNewDocumentPath={setNewDocumentPath}
@@ -651,7 +725,7 @@ export default function OctavePage() {
           <button className="icon-button rail-toggle" onClick={() => setRailOpen(true)} aria-label="Open workspace navigation"><Icon name="menu"/></button>
           <div className="document-heading">
             <p className="eyebrow">{activeWorkspace?.name || 'No workspace'}</p>
-            <h1>{selectedPath || 'Choose a research document'}</h1>
+            <h1>{workView === 'memo' && activeReview ? activeReview.title : selectedPath || 'Choose a research document'}</h1>
           </div>
           <div className="document-status">
             <label className="ai-picker" title={providers.find((provider) => provider.id === providerId)?.setupHint}>
@@ -690,6 +764,7 @@ export default function OctavePage() {
                 ['editor', 'Editor'],
                 ['chat', 'Chat'],
                 ['review', revision ? `Review (${revisionHunks.length})` : 'Review'],
+                ...(activeReview ? [['memo', 'Memo'] as [WorkView, string]] : []),
                 ['log', 'Log'],
                 ['pdf', 'PDF'],
               ] as Array<[WorkView, string]>).map(([view, label]) => (
@@ -731,6 +806,8 @@ export default function OctavePage() {
                 {workView === 'chat' && (
                   <ChatPanel
                     messages={messages}
+                    savedReviewMessageIndexes={savedReviewMessageIndexes}
+                    savingReviewMessageTs={savingReviewMessageTs}
                     files={files}
                     attachmentPaths={attachmentPaths}
                     input={chatInput}
@@ -749,6 +826,7 @@ export default function OctavePage() {
                     onScope={changeChatScope}
                     onToggleAttachment={toggleAttachment}
                     onRemoveAttachment={(attachmentPath) => setAttachmentPaths((current) => current.filter((path) => path !== attachmentPath))}
+                    onSaveReview={(messageIndex) => saveReviewMemo(messageIndex).catch(showError)}
                     onSend={() => sendChat().catch(showError)}
                     onProposeRevision={() => proposeRevision().catch(showError)}
                     onStop={stopChat}
@@ -765,6 +843,15 @@ export default function OctavePage() {
                     onExcludeAll={() => setIncludedHunks(new Set())}
                     onApply={() => applyRevision().catch(showError)}
                     onDiscard={() => { setRevision(null); setIncludedHunks(new Set()); }}
+                  />
+                )}
+
+                {workView === 'memo' && (
+                  <ReviewMemoPanel
+                    review={activeReview}
+                    deleting={deletingReview}
+                    onOpenSourceChat={(chatId) => loadChat(chatId).catch(showError)}
+                    onDelete={(review) => deleteReviewMemo(review).catch(showError)}
                   />
                 )}
 

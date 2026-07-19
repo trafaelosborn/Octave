@@ -13,6 +13,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Extracts read-only research context from PDF, Word, Excel, PowerPoint, OpenDocument, and RTF files with explicit limits and warnings.
 - Keeps durable project and document chats, with document conversations fixed to their source file.
 - Attaches up to eight supported project files to an individual message as bounded, durable extraction snapshots.
+- Saves completed model responses as linked Markdown review memos that remain readable outside Octave.
 - Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
@@ -50,7 +51,7 @@ On macOS or Linux:
 OCTAVE_ROOT="$PWD/examples/demo-workspace" npm run dev
 ```
 
-Workspace registrations live in `~/.octave/workspaces.json`. Per-project chats and pinned-context state live under the selected folder's `.octave/` directory.
+Workspace registrations live in `~/.octave/workspaces.json`. Per-project chats, saved review memos, and pinned-context state live under the selected folder's `.octave/` directory.
 
 ## Model providers
 
@@ -139,6 +140,8 @@ Octave persists both project chats and document chats inside the workspace. Docu
 - Generated chat, context, build, and dependency directories are excluded from workspace discovery.
 
 See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research formats, extraction behavior, and limits.
+
+See [docs/REVIEW_MEMOS.md](docs/REVIEW_MEMOS.md) for saved-review storage and source-link behavior.
 
 See [SECURITY.md](SECURITY.md) for reporting and boundary details.
 

@@ -9,6 +9,7 @@ import {
   type ChatScope,
   type ChatAttachment,
   type ChatMessage,
+  type ChatMessageAttribution,
 } from '../core/chat.js';
 
 const CHATS_DIRECTORY = path.join('.octave', 'chats');
@@ -87,6 +88,7 @@ export async function appendMessage(
   role: 'user' | 'assistant',
   content: string,
   attachments?: ChatAttachment[],
+  attribution?: ChatMessageAttribution,
 ): Promise<ChatSession> {
   const normalizedContent = content.trim();
   if (!normalizedContent) throw new Error('Chat messages cannot be empty.');
@@ -97,6 +99,9 @@ export async function appendMessage(
   if (role === 'assistant' && attachments !== undefined) {
     throw new Error('Assistant messages cannot include file attachments.');
   }
+  if (role === 'user' && attribution !== undefined) {
+    throw new Error('Only assistant messages can include provider attribution.');
+  }
 
   const message: ChatMessage = {
     ts: new Date().toISOString(),
@@ -104,6 +109,10 @@ export async function appendMessage(
     content: normalizedContent,
   };
   if (attachments !== undefined) message.attachments = attachments;
+  if (attribution !== undefined) {
+    message.providerId = attribution.providerId;
+    if (attribution.modelId !== undefined) message.modelId = attribution.modelId;
+  }
   session.messages.push(message);
   session.updatedAt = new Date().toISOString();
 

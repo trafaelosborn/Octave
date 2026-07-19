@@ -4,6 +4,7 @@ import type {
   OctaveFile,
   OutlineItem,
   RailView,
+  ReviewMemoMeta,
   SearchResult,
   Workspace,
 } from '../lib/client-types';
@@ -13,6 +14,7 @@ const railTabs: Array<{ id: RailView; label: string; icon: IconName }> = [
   { id: 'files', label: 'Files', icon: 'folder' },
   { id: 'search', label: 'Search', icon: 'search' },
   { id: 'chats', label: 'Chats', icon: 'chat' },
+  { id: 'reviews', label: 'Reviews', icon: 'book' },
   { id: 'outline', label: 'Outline', icon: 'list' },
   { id: 'citations', label: 'Citations', icon: 'quote' },
   { id: 'context', label: 'Context', icon: 'pin' },
@@ -35,6 +37,8 @@ export function WorkspaceRail({
   searching,
   chats,
   activeChatId,
+  reviews,
+  activeReviewId,
   outline,
   citations,
   newDocumentPath,
@@ -57,6 +61,7 @@ export function WorkspaceRail({
   onOpenSearchResult,
   onNewChat,
   onOpenChat,
+  onOpenReview,
   onOutlineItem,
   onRefreshCitations,
   onNewDocumentPath,
@@ -78,6 +83,8 @@ export function WorkspaceRail({
   searching: boolean;
   chats: ChatSessionMeta[];
   activeChatId: string;
+  reviews: ReviewMemoMeta[];
+  activeReviewId: string;
   outline: OutlineItem[];
   citations: CitationScan | null;
   newDocumentPath: string;
@@ -100,6 +107,7 @@ export function WorkspaceRail({
   onOpenSearchResult: (result: SearchResult) => void;
   onNewChat: () => void;
   onOpenChat: (chatId: string) => void;
+  onOpenReview: (reviewId: string) => void;
   onOutlineItem: (item: OutlineItem) => void;
   onRefreshCitations: () => void;
   onNewDocumentPath: (value: string) => void;
@@ -157,6 +165,7 @@ export function WorkspaceRail({
               <Icon name={tab.icon} size={16} />
               <span>{tab.label}</span>
               {tab.id === 'chats' && chats.length > 0 && <b>{chats.length}</b>}
+              {tab.id === 'reviews' && reviews.length > 0 && <b>{reviews.length}</b>}
               {tab.id === 'context' && pinnedPaths.length > 0 && <b>{pinnedPaths.length}</b>}
               {tab.id === 'citations' && citations?.summary.missing ? <b className="warn-count">{citations.summary.missing}</b> : null}
             </button>
@@ -219,6 +228,22 @@ export function WorkspaceRail({
                   </button>
                 ))}
                 {chats.length === 0 && <RailEmpty text="Conversations remain inside this workspace." />}
+              </div>
+            </div>
+          )}
+
+          {railView === 'reviews' && (
+            <div className="rail-section">
+              <div className="section-heading"><span>Saved review memos</span><small>{reviews.length}</small></div>
+              <p className="rail-explainer">Durable Markdown artifacts saved from completed Octave responses.</p>
+              <div className="review-list">
+                {reviews.map((review) => (
+                  <button key={review.id} className={activeReviewId === review.id ? 'selected' : ''} onClick={() => onOpenReview(review.id)}>
+                    <span>{review.title}</span>
+                    <small>{review.documentPath ?? 'Project review'} · {timeAgo(review.createdAt)}</small>
+                  </button>
+                ))}
+                {reviews.length === 0 && <RailEmpty text="Save a completed assistant response to create a review memo." />}
               </div>
             </div>
           )}

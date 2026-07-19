@@ -21,6 +21,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   attachments?: ChatAttachment[];
+  providerId?: string;
+  modelId?: string;
 }
 
 export interface ChatAttachment {
@@ -98,11 +100,27 @@ export interface RevisionPreview {
   after: string;
 }
 
+export interface ReviewMemo {
+  id: string;
+  title: string;
+  createdAt: string;
+  sourceChatId: string;
+  sourceMessageTs: string;
+  sourceMessageIndex: number;
+  artifactPath: string;
+  content: string;
+  documentPath?: string;
+  providerId?: string;
+  modelId?: string;
+}
+
+export type ReviewMemoMeta = Omit<ReviewMemo, 'content'>;
+
 export interface OutlineItem {
   level: 'section' | 'subsection' | 'subsubsection';
   title: string;
   line: number;
 }
 
-export type WorkView = 'editor' | 'chat' | 'review' | 'log' | 'pdf';
-export type RailView = 'files' | 'search' | 'chats' | 'outline' | 'citations' | 'context';
+export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'log' | 'pdf';
+export type RailView = 'files' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';

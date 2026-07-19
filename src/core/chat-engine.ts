@@ -5,6 +5,7 @@ import {
   MAX_CHAT_ATTACHMENTS,
   type ChatAttachment,
   type ChatMessage,
+  type ChatMessageAttribution,
   type ChatSession,
 } from './chat.js';
 import { buildWorkspaceContext } from './context.js';
@@ -83,6 +84,8 @@ export async function sendChatMessage(
   if (options.model !== undefined) streamOptions.model = options.model;
   if (options.temperature !== undefined) streamOptions.temperature = options.temperature;
   if (options.maxTokens !== undefined) streamOptions.maxTokens = options.maxTokens;
+  const attribution: ChatMessageAttribution = { providerId: options.provider.id };
+  if (options.model !== undefined) attribution.modelId = options.model;
 
   let assistantContent = '';
   try {
@@ -92,14 +95,21 @@ export async function sendChatMessage(
     }
   } catch (error) {
     if (assistantContent.trim()) {
-      await appendMessage(options.workspaceRoot, options.chatId, 'assistant', assistantContent);
+      await appendMessage(options.workspaceRoot, options.chatId, 'assistant', assistantContent, undefined, attribution);
     }
     throw error;
   }
 
   if (!assistantContent.trim()) throw new Error('Model returned an empty response.');
 
-  session = await appendMessage(options.workspaceRoot, options.chatId, 'assistant', assistantContent);
+  session = await appendMessage(
+    options.workspaceRoot,
+    options.chatId,
+    'assistant',
+    assistantContent,
+    undefined,
+    attribution,
+  );
   const assistantMessage = session.messages.at(-1);
   if (!assistantMessage) throw new Error('Failed to persist the assistant message.');
 
