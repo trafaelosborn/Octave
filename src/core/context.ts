@@ -1,10 +1,12 @@
 import { readDocument } from './path.js';
+import { buildCitationEvidenceContext, DEFAULT_CITATION_EVIDENCE_CONTEXT_CHARS } from './citation-evidence.js';
 
 export interface ContextOptions {
   workspaceRoot: string;
   currentDocumentPath?: string;
   pinnedFiles?: string[];
   maxContextChars?: number;
+  includeCitationEvidence?: boolean;
 }
 
 const DEFAULT_MAX_CONTEXT_CHARS = 80_000;
@@ -25,10 +27,15 @@ export async function buildWorkspaceContext(options: ContextOptions): Promise<st
 
   if (paths.length === 0) {
     parts.push('No document content is attached to this message.');
-    return parts.join('\n\n');
   }
 
-  let remaining = maxContextChars;
+  if (options.includeCitationEvidence && maxContextChars < 1_000) {
+    throw new Error('Citation-aware context requires a maxContextChars value of at least 1,000.');
+  }
+  const citationBudget = options.includeCitationEvidence
+    ? Math.min(DEFAULT_CITATION_EVIDENCE_CONTEXT_CHARS, Math.max(1_000, Math.floor(maxContextChars * 0.35)), maxContextChars)
+    : 0;
+  let remaining = maxContextChars - citationBudget;
   for (const documentPath of paths) {
     if (remaining <= 0) break;
 
@@ -50,6 +57,10 @@ export async function buildWorkspaceContext(options: ContextOptions): Promise<st
 
   if (remaining <= 0 && paths.length > 1) {
     parts.push('[Additional context files omitted because the context limit was reached.]');
+  }
+
+  if (options.includeCitationEvidence) {
+    parts.push(await buildCitationEvidenceContext(options.workspaceRoot, options.currentDocumentPath, citationBudget));
   }
 
   return parts.join('\n\n');

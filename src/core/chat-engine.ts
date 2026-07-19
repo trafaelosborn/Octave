@@ -25,6 +25,7 @@ export interface SendMessageOptions {
   temperature?: number;
   maxTokens?: number;
   maxContextChars?: number;
+  includeCitationEvidence?: boolean;
 }
 
 export interface SendMessageResult {
@@ -73,6 +74,7 @@ export async function sendChatMessage(
   if (scopedDocumentPath !== undefined) contextOptions.currentDocumentPath = scopedDocumentPath;
   if (options.pinnedFiles !== undefined) contextOptions.pinnedFiles = options.pinnedFiles;
   if (options.maxContextChars !== undefined) contextOptions.maxContextChars = options.maxContextChars;
+  if (options.includeCitationEvidence !== undefined) contextOptions.includeCitationEvidence = options.includeCitationEvidence;
 
   const systemContext = await buildWorkspaceContext(contextOptions);
   const providerMessages: ProviderMessage[] = [

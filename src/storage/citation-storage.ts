@@ -5,6 +5,7 @@ import {
   type CitationCorpusIndex,
   type CitationSourceRecord,
 } from '../core/citation-corpus.js';
+import type { CitationEvidenceAudit } from '../core/citation-evidence.js';
 
 const CITATIONS_DIRECTORY = 'citations';
 
@@ -16,7 +17,7 @@ export async function ensureCitationDirectory(workspaceRoot: string): Promise<st
 
 export async function loadCitationIndex(workspaceRoot: string): Promise<CitationCorpusIndex | null> {
   try {
-    const raw = await fs.readFile(path.join(await ensureCitationDirectory(workspaceRoot), 'index.json'), 'utf8');
+    const raw = await fs.readFile(path.join(path.resolve(workspaceRoot), CITATIONS_DIRECTORY, 'index.json'), 'utf8');
     const parsed = JSON.parse(raw) as unknown;
     return isCitationCorpusIndex(parsed) ? parsed : null;
   } catch (error) {
@@ -43,6 +44,23 @@ export async function saveCitationRecord(workspaceRoot: string, record: Citation
   assertInsideWorkspace(directory, workspaceRoot);
   await fs.mkdir(directory, { recursive: true });
   await writeJsonAtomic(path.join(directory, 'metadata.json'), record);
+}
+
+export async function loadCitationAudit(workspaceRoot: string): Promise<CitationEvidenceAudit | null> {
+  try {
+    const raw = await fs.readFile(path.join(path.resolve(workspaceRoot), CITATIONS_DIRECTORY, 'audit.json'), 'utf8');
+    const parsed = JSON.parse(raw) as Partial<CitationEvidenceAudit>;
+    return parsed.version === 1 && Array.isArray(parsed.packets) && parsed.summary && typeof parsed.summary === 'object'
+      ? parsed as CitationEvidenceAudit
+      : null;
+  } catch (error) {
+    if (isMissingFileError(error) || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+export async function saveCitationAudit(workspaceRoot: string, audit: CitationEvidenceAudit): Promise<void> {
+  await writeJsonAtomic(path.join(await ensureCitationDirectory(workspaceRoot), 'audit.json'), audit);
 }
 
 export function resolveCitationArtifactPath(workspaceRoot: string, relativePath: string): string {

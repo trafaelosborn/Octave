@@ -196,6 +196,29 @@ describe('citation acquisition', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('refuses IPv4-mapped private IPv6 download locations', async () => {
+    await writeProject(String.raw`Evidence \cite{unsafe}.`, '@article{unsafe, doi={10.1000/unsafe}}');
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('api.crossref.org')) return jsonResponse({ message: {} });
+      if (url.includes('/idconv/')) return jsonResponse({ records: [{}] });
+      if (url.includes('api.unpaywall.org')) {
+        return jsonResponse({ is_oa: true, best_oa_location: { url_for_pdf: 'https://[::ffff:7f00:1]/private.pdf' } });
+      }
+      throw new Error(`Private URL should not be fetched: ${url}`);
+    });
+
+    const index = await syncCitationCorpus(workspaceRoot, {
+      email: 'researcher@example.com',
+      fetch: fetchMock as unknown as typeof fetch,
+      resolveHost,
+      now,
+    });
+    expect(index.records[0]?.status).toBe('manual_required');
+    expect(index.records[0]?.attempts?.some((attempt) => attempt.message.includes('private or non-routable'))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('creates bounded chunks and readable Markdown from structured XML', () => {
     const markdown = extractJatsMarkdown('<article><body><sec><title>Methods</title><p>Alpha &amp; beta.</p></sec></body></article>');
     expect(markdown).toContain('## Methods');

@@ -56,6 +56,22 @@ describe('chat engine', () => {
     expect((await loadChat(workspaceRoot, chat.id))?.lastDocumentPath).toBe('paper.tex');
   });
 
+  it('adds citation evidence guardrails only when a review requests them', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'document', documentPath: 'paper.tex' });
+    const provider = new RecordingProvider();
+
+    await sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Verify the citations.',
+      provider,
+      includeCitationEvidence: true,
+    });
+
+    expect(provider.messages[0]?.content).toContain('<citation-evidence status="unavailable">');
+    expect(provider.messages[0]?.content).toContain('Do not describe any citation as verified');
+  });
+
   it('keeps workspace chats independent of the open document', async () => {
     const chat = await createChat(workspaceRoot, { scope: 'workspace' });
     const provider = new RecordingProvider();

@@ -504,24 +504,53 @@ async function resolvePublicHost(hostname: string): Promise<string[]> {
 function isPrivateAddress(address: string): boolean {
   const normalized = address.toLowerCase();
   if (net.isIPv4(normalized)) {
-    const [first = 0, second = 0] = normalized.split('.').map(Number);
+    const [first = 0, second = 0, third = 0] = normalized.split('.').map(Number);
     return (
       first === 0 || first === 10 || first === 127 ||
       (first === 100 && second >= 64 && second <= 127) ||
       (first === 169 && second === 254) ||
       (first === 172 && second >= 16 && second <= 31) ||
       (first === 192 && second === 168) ||
+      (first === 192 && second === 0 && third === 0) ||
+      (first === 192 && second === 0 && third === 2) ||
+      (first === 192 && second === 88 && third === 99) ||
       (first === 198 && (second === 18 || second === 19)) ||
+      (first === 198 && second === 51 && third === 100) ||
+      (first === 203 && second === 0 && third === 113) ||
       first >= 224
     );
   }
   if (net.isIPv6(normalized)) {
-    if (normalized === '::1' || normalized === '::') return true;
-    if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true;
-    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
-    return mapped ? isPrivateAddress(mapped) : false;
+    const words = expandIpv6(normalized);
+    if (!words) return true;
+    const [first = 0, second = 0] = words;
+    if (words.slice(0, 7).every((word) => word === 0) && (words[7] === 0 || words[7] === 1)) return true;
+    if ((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00) return true;
+    if (first === 0x0100 && words.slice(1, 4).every((word) => word === 0)) return true;
+    if (first === 0x2001 && (second === 0x0002 || second === 0x0db8)) return true;
+    if (words.slice(0, 5).every((word) => word === 0) && words[5] === 0xffff) {
+      return isPrivateAddress(`${words[6]! >> 8}.${words[6]! & 0xff}.${words[7]! >> 8}.${words[7]! & 0xff}`);
+    }
+    if (first === 0x2002) {
+      return isPrivateAddress(`${second >> 8}.${second & 0xff}.${words[2]! >> 8}.${words[2]! & 0xff}`);
+    }
+    return false;
   }
   return true;
+}
+
+function expandIpv6(address: string): number[] | null {
+  const halves = address.split('::');
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const values = [...left, ...Array.from({ length: missing }, () => '0'), ...right]
+    .map((word) => Number.parseInt(word, 16));
+  return values.length === 8 && values.every((word) => Number.isInteger(word) && word >= 0 && word <= 0xffff)
+    ? values
+    : null;
 }
 
 function validateSourceBytes(bytes: Buffer, mediaType: AcquisitionCandidate['mediaType']): void {
