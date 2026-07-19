@@ -18,6 +18,7 @@ export async function POST(request: Request): Promise<Response> {
       provider?: string;
       model?: string;
       attachmentPaths?: string[];
+      includeCitationEvidence?: boolean;
     }>(request);
     const prompt = body.prompt?.trim() ?? '';
     if (!prompt) throw new Error('A prompt is required.');
@@ -26,6 +27,9 @@ export async function POST(request: Request): Promise<Response> {
       body.attachmentPaths.some((attachmentPath) => typeof attachmentPath !== 'string')
     )) {
       throw new Error('attachmentPaths must be an array of workspace-relative file paths.');
+    }
+    if (body.includeCitationEvidence !== undefined && typeof body.includeCitationEvidence !== 'boolean') {
+      throw new Error('includeCitationEvidence must be a boolean.');
     }
 
     const workspace = await getWorkspace(body.workspaceId);
@@ -56,6 +60,7 @@ export async function POST(request: Request): Promise<Response> {
         if (scopedDocumentPath !== undefined) options.currentDocumentPath = scopedDocumentPath;
         if (body.model !== undefined) options.model = body.model;
         if (body.attachmentPaths !== undefined) options.attachmentPaths = body.attachmentPaths;
+        if (body.includeCitationEvidence !== undefined) options.includeCitationEvidence = body.includeCitationEvidence;
 
         sendChatMessage(options, (delta) => {
           controller.enqueue(encoder.encode(delta));

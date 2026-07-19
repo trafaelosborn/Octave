@@ -167,6 +167,7 @@ button { border: 0; }
 .rail-section { display: flex; flex-direction: column; gap: 10px; min-height: 100%; }
 .section-heading { align-items: center; color: var(--rail-text); display: flex; font-size: 11px; font-weight: 700; justify-content: space-between; letter-spacing: .1em; padding: 2px 2px 4px; text-transform: uppercase; }
 .section-heading small { color: var(--rail-muted); font-weight: 500; }
+.section-actions { align-items: center; display: flex; gap: 3px; }
 
 .input-with-icon { align-items: center; background: var(--rail-raised); border: 1px solid rgb(255 255 255 / 7%); border-radius: 7px; color: var(--rail-muted); display: flex; gap: 7px; padding: 0 9px; }
 .input-with-icon input, .rail-search-form input, .new-document input {
@@ -217,11 +218,32 @@ button { border: 0; }
 .outline-list button.subsubsection { padding-left: 28px; }
 .outline-list button { flex-direction: row; justify-content: space-between; }
 
-.citation-metrics { display: grid; gap: 5px; grid-template-columns: repeat(2, 1fr); }
-.citation-metrics div { background: var(--rail-raised); border-radius: 7px; display: flex; flex-direction: column; padding: 10px; }
-.citation-metrics b { font-family: var(--font-serif); font-size: 20px; }
-.citation-metrics span { color: var(--rail-muted); font-size: 10px; }
-.citation-metrics .warning { background: #4a3029; color: #ffc6a8; }
+.citation-metrics, .citation-source-metrics { display: grid; gap: 5px; grid-template-columns: repeat(2, 1fr); }
+.citation-metrics div, .citation-source-metrics div { background: var(--rail-raised); border-radius: 7px; display: flex; flex-direction: column; padding: 10px; }
+.citation-metrics b, .citation-source-metrics b { font-family: var(--font-serif); font-size: 20px; }
+.citation-metrics span, .citation-source-metrics span { color: var(--rail-muted); font-size: 10px; }
+.citation-metrics .warning, .citation-source-metrics .warning { background: #4a3029; color: #ffc6a8; }
+.citation-setup-note { background: #293b36; border: 1px solid #3c514b; border-radius: 6px; color: #b6c8c2; font-size: 9px; line-height: 1.5; margin: 0; padding: 8px; }
+.citation-setup-note code { color: #e1c485; }
+.citation-audit-summary { background: #263b35; border: 1px solid #39564e; border-radius: 7px; display: grid; gap: 6px; padding: 9px; }
+.citation-audit-summary > div { display: grid; gap: 2px; }
+.citation-audit-summary strong { color: var(--rail-text); font-size: 10px; }
+.citation-audit-summary span, .citation-audit-summary small { color: var(--rail-muted); font-size: 8px; }
+.citation-audit-summary small { color: #e0ad72; }
+.citation-audit-summary button { background: transparent; color: #dcc07f; font-size: 9px; padding: 0; text-align: left; }
+.citation-source-list { display: grid; gap: 6px; }
+.citation-source { background: var(--rail-raised); border-left: 2px solid #687b75; border-radius: 6px; display: grid; gap: 5px; padding: 8px; }
+.citation-source.citation-status-downloaded { border-left-color: #58a98e; }
+.citation-source.citation-status-manual_required, .citation-source.citation-status-blocked_by_license { border-left-color: #d19a58; }
+.citation-source.citation-status-failed, .citation-source.citation-status-ambiguous { border-left-color: #c86e65; }
+.citation-source header { align-items: center; display: flex; gap: 7px; justify-content: space-between; }
+.citation-source header strong { color: var(--rail-text); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.citation-source header span { background: #3c504a; border-radius: 9px; color: #bdcbc6; flex: 0 0 auto; font-size: 8px; padding: 2px 6px; text-transform: uppercase; }
+.citation-source p { color: var(--rail-text); font-size: 10px; line-height: 1.4; margin: 0; }
+.citation-source small { color: var(--rail-muted); font-size: 8px; line-height: 1.4; overflow-wrap: anywhere; }
+.citation-source code { color: #d9bd84; font-size: 8px; }
+.citation-source button, .citation-source a { background: transparent; color: #dcc07f; font-size: 9px; padding: 2px 0; text-align: left; text-decoration: none; }
+.citation-source button:hover, .citation-source a:hover { color: #f4d798; }
 .rail-label { color: var(--rail-muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; margin: 5px 2px 0; text-transform: uppercase; }
 .rail-label.warning { color: #efae8e; }
 .citation-issue { align-items: center; background: #3b2c29; border-radius: 6px; color: #ffd1bd; display: flex; justify-content: space-between; padding: 8px; text-align: left; }

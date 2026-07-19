@@ -85,12 +85,73 @@ export interface CitationScan {
   bibliographyKeys: string[];
   missing: CitationIssue[];
   unused: string[];
+  sources: CitationSourceRecord[];
+  sourceSummary: Record<CitationSourceStatus, number>;
+  unpaywallConfigured: boolean;
+  audit: {
+    generatedAt: string;
+    path: string;
+    stale: boolean;
+    truncated: boolean;
+    summary: {
+      claims: number;
+      evidenceFound: number;
+      noLexicalMatch: number;
+      sourceUnavailable: number;
+    };
+    byCitation: Record<string, { claims: number; evidenceFound: number; unavailable: number }>;
+  } | null;
   summary: {
     cited: number;
     bibliography: number;
     missing: number;
     unused: number;
   };
+}
+
+export type CitationSourceStatus =
+  | 'not_requested'
+  | 'unresolved'
+  | 'downloaded'
+  | 'metadata_only'
+  | 'manual_required'
+  | 'blocked_by_license'
+  | 'ambiguous'
+  | 'failed';
+
+export interface CitationSourceRecord {
+  key: string;
+  directory: string;
+  cited: boolean;
+  status: CitationSourceStatus;
+  fingerprint: string;
+  entryType: string;
+  bibPaths: string[];
+  identifiers: { doi?: string; arxivId?: string; pmid?: string; pmcid?: string };
+  metadata: { title?: string; authors?: string[]; year?: string; venue?: string; url?: string };
+  reason?: string;
+  acquisition?: {
+    source: 'pmc' | 'arxiv' | 'unpaywall' | 'manual';
+    acquiredAt: string;
+    originalPath: string;
+    extractedPath: string;
+    chunksPath: string;
+    mediaType: string;
+    bytes: number;
+    sha256: string;
+    sourceUrl?: string;
+    landingPageUrl?: string;
+    license?: string;
+    version?: string;
+    extractionWarnings?: string[];
+  };
+  attempts?: Array<{
+    attemptedAt: string;
+    resolver: string;
+    outcome: CitationSourceStatus;
+    message: string;
+    url?: string;
+  }>;
 }
 
 export interface RevisionPreview {

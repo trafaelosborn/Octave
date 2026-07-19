@@ -88,6 +88,7 @@ export default function OctavePage() {
   const [savingReviewMessageTs, setSavingReviewMessageTs] = useState('');
   const [deletingReview, setDeletingReview] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [syncingCitations, setSyncingCitations] = useState(false);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
@@ -366,6 +367,23 @@ export default function OctavePage() {
     setCitations(await apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(activeWorkspaceId)}`));
   }
 
+  async function syncCitationSources(): Promise<void> {
+    if (!activeWorkspaceId || syncingCitations) return;
+    setSyncingCitations(true);
+    try {
+      const scan = await apiJson<CitationScan>('/api/citations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId }),
+      });
+      setCitations(scan);
+      await refreshFiles();
+      setError('');
+    } finally {
+      setSyncingCitations(false);
+    }
+  }
+
   async function createNewChat(): Promise<string> {
     if (!activeWorkspaceId) throw new Error('Open a workspace before starting a chat.');
     if (chatScope === 'document' && !selectedPath) throw new Error('Open a document before starting a document chat.');
@@ -461,7 +479,7 @@ export default function OctavePage() {
     if (show) setWorkView('chat');
   }
 
-  async function sendChat(promptOverride?: string): Promise<void> {
+  async function sendChat(promptOverride?: string, includeCitationEvidence = false): Promise<void> {
     const prompt = (promptOverride ?? chatInput).trim();
     if (!prompt || chatLoading || !activeWorkspaceId) return;
 
@@ -506,6 +524,7 @@ export default function OctavePage() {
           provider: providerId,
           model: modelId || undefined,
           attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
+          includeCitationEvidence,
         }),
       });
       if (!response.ok) {
@@ -693,6 +712,7 @@ export default function OctavePage() {
         activeReviewId={activeReview?.id ?? ''}
         outline={outline}
         citations={citations}
+        syncingCitations={syncingCitations}
         newDocumentPath={newDocumentPath}
         onClose={() => setRailOpen(false)}
         onRailView={setRailView}
@@ -716,6 +736,8 @@ export default function OctavePage() {
         onOpenReview={(reviewId) => loadReviewMemo(reviewId).catch(showError)}
         onOutlineItem={openOutlineItem}
         onRefreshCitations={guard(refreshCitations)}
+        onSyncCitations={guard(syncCitationSources)}
+        onOpenCitationSource={(path) => loadDocument(path).catch(showError)}
         onNewDocumentPath={setNewDocumentPath}
         onCreateDocument={guard(createDocument)}
       />
@@ -739,7 +761,7 @@ export default function OctavePage() {
             </label>
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
-            <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
+            <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT, true).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
             <button className="button button-primary" disabled={!selectedPath || !dirty || saving || documentReadOnly} onClick={guard(() => saveDocument())}>{documentReadOnly ? 'Read only' : saving ? 'Saving...' : 'Save'}</button>
           </div>
         </header>

@@ -36,9 +36,11 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Recompile applicable TeX documents after accepted or rejected revision changes.
    - Treat compilation failure as reviewable process state, not a fatal UI error.
 
-7. **Citation retrieval and source status**
-   - Track bibliography metadata, missing keys, missing source files, and metadata-only references.
-   - Keep retrieval optional and reviewable.
+7. **Citation retrieval and source status** — implemented
+   - Cited BibTeX entries have durable statuses, identifiers, provenance, attempts, and stable workspace-local directories.
+   - Explicit source sync retrieves structured PMC full text, arXiv PDFs, or open-access DOI copies; closed and unresolved records remain visible for manual import.
+   - Originals, extracted Markdown, JSONL chunks, and a machine-readable exact-source evidence audit live under `citations/`.
+   - Paper review receives bounded candidate passages while preserving missing, stale, and no-match states; candidates are never labeled as proof of support.
 
 8. **Visual document maps**
    - Generate and persist navigable maps of claims, sections, dependencies, and cited sources.

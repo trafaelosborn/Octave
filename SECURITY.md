@@ -14,9 +14,15 @@ Python and R execution is not a sandbox. Octave validates the selected script pa
 
 The `.octave/` directory inside a workspace contains local chat history. It should not be committed with research material unless that is intentional.
 
+## Citation retrieval
+
+Citation retrieval runs only after the user selects **Fetch sources**. Remote downloads must use HTTPS, cannot contain URL credentials, and are rejected when DNS resolves to a local, private, or non-routable address. Every redirect is checked again. Metadata responses, source downloads, redirect counts, request duration, file signatures, and extracted text are bounded.
+
+Octave queries scholarly metadata and legitimate open-access locations; it does not attempt to bypass authentication, paywalls, or publisher access controls. Manual sources are accepted only from the generated citation directory and are subject to the same type and size checks. Acquired files and their recorded URLs should still be treated as untrusted research material.
+
 ## Provider privacy
 
-Ollama requests remain on the configured Ollama host. Anthropic requests send the selected document context and conversation to Anthropic's API. Octave never sends documents to a provider until a chat request is made with that provider.
+Ollama requests remain on the configured Ollama host. Anthropic, OpenAI, and xAI requests send the selected document context and conversation to the chosen provider. A citation-aware paper review can include bounded passages from the local citation corpus. Octave never sends documents to a model provider until a chat request is made with that provider.
 
 Store API keys in environment variables. Never commit `.env` files.
 

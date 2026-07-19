@@ -41,6 +41,7 @@ export function WorkspaceRail({
   activeReviewId,
   outline,
   citations,
+  syncingCitations,
   newDocumentPath,
   onClose,
   onRailView,
@@ -64,6 +65,8 @@ export function WorkspaceRail({
   onOpenReview,
   onOutlineItem,
   onRefreshCitations,
+  onSyncCitations,
+  onOpenCitationSource,
   onNewDocumentPath,
   onCreateDocument,
 }: {
@@ -87,6 +90,7 @@ export function WorkspaceRail({
   activeReviewId: string;
   outline: OutlineItem[];
   citations: CitationScan | null;
+  syncingCitations: boolean;
   newDocumentPath: string;
   onClose: () => void;
   onRailView: (view: RailView) => void;
@@ -110,6 +114,8 @@ export function WorkspaceRail({
   onOpenReview: (reviewId: string) => void;
   onOutlineItem: (item: OutlineItem) => void;
   onRefreshCitations: () => void;
+  onSyncCitations: () => void;
+  onOpenCitationSource: (path: string) => void;
   onNewDocumentPath: (value: string) => void;
   onCreateDocument: () => void;
 }) {
@@ -264,7 +270,13 @@ export function WorkspaceRail({
 
           {railView === 'citations' && (
             <div className="rail-section">
-              <div className="section-heading"><span>Citation audit</span><button className="text-button" onClick={onRefreshCitations}>Refresh</button></div>
+              <div className="section-heading">
+                <span>Citation sources</span>
+                <div className="section-actions">
+                  <button className="text-button" onClick={onRefreshCitations} disabled={syncingCitations}>Refresh</button>
+                  <button className="text-button" onClick={onSyncCitations} disabled={syncingCitations}>{syncingCitations ? 'Fetching...' : 'Fetch sources'}</button>
+                </div>
+              </div>
               {citations ? (
                 <>
                   <div className="citation-metrics">
@@ -273,6 +285,25 @@ export function WorkspaceRail({
                     <Metric label="Missing" value={citations.summary.missing} warning/>
                     <Metric label="Unused" value={citations.summary.unused}/>
                   </div>
+                  <div className="citation-source-metrics">
+                    <Metric label="Downloaded" value={citations.sourceSummary.downloaded}/>
+                    <Metric label="Manual" value={citations.sourceSummary.manual_required + citations.sourceSummary.blocked_by_license} warning/>
+                    <Metric label="Pending" value={citations.sourceSummary.unresolved + citations.sourceSummary.metadata_only}/>
+                    <Metric label="Failed" value={citations.sourceSummary.failed + citations.sourceSummary.ambiguous} warning/>
+                  </div>
+                  {citations.audit && (
+                    <div className="citation-audit-summary">
+                      <div>
+                        <strong>Evidence packets</strong>
+                        <span>{citations.audit.summary.evidenceFound}/{citations.audit.summary.claims} claims have lexical source passages</span>
+                      </div>
+                      {citations.audit.stale && <small>Stale — fetch sources again</small>}
+                      <button onClick={() => onOpenCitationSource(citations.audit!.path)}>Open machine-readable audit</button>
+                    </div>
+                  )}
+                  {!citations.unpaywallConfigured && citations.sources.some((source) => source.identifiers.doi) && (
+                    <p className="citation-setup-note">Set <code>OCTAVE_SCHOLARLY_EMAIL</code> to enable DOI open-access lookup through Unpaywall.</p>
+                  )}
                   {citations.missing.length > 0 && <p className="rail-label warning">Missing bibliography entries</p>}
                   {citations.missing.map((issue) => (
                     <button className="citation-issue" key={issue.key} onClick={() => onOpenFile(issue.path, issue.line)}>
@@ -281,6 +312,29 @@ export function WorkspaceRail({
                   ))}
                   {citations.unused.length > 0 && <p className="rail-label">Unused bibliography keys</p>}
                   <div className="key-cloud">{citations.unused.slice(0, 24).map((key) => <span key={key}>{key}</span>)}</div>
+                  <p className="rail-label">Cited source corpus</p>
+                  <div className="citation-source-list">
+                    {citations.sources.map((source) => {
+                      const externalUrl = citationExternalUrl(source);
+                      const evidence = citations.audit?.byCitation[source.key];
+                      return (
+                        <article className={`citation-source citation-status-${source.status}`} key={source.key}>
+                          <header><strong>{source.key}</strong><span>{citationStatusLabel(source.status)}</span></header>
+                          <p>{source.metadata.title ?? source.reason ?? 'Bibliography metadata unavailable'}</p>
+                          {source.reason && source.metadata.title && <small>{source.reason}</small>}
+                          {evidence && <small>{evidence.evidenceFound}/{evidence.claims} cited claims have candidate passages{evidence.unavailable ? ` · ${evidence.unavailable} unavailable` : ''}</small>}
+                          {source.status === 'downloaded' && source.acquisition && (
+                            <button onClick={() => onOpenCitationSource(source.acquisition!.extractedPath)}>Open extracted text</button>
+                          )}
+                          {source.status !== 'downloaded' && (
+                            <small>Manual file: <code>{source.directory}/manual.pdf</code> or <code>{source.directory}/manual.xml</code></small>
+                          )}
+                          {externalUrl && <a href={externalUrl} target="_blank" rel="noreferrer">Open source record</a>}
+                        </article>
+                      );
+                    })}
+                    {citations.sources.length === 0 && <RailEmpty text="Cited bibliography entries will appear here." />}
+                  </div>
                 </>
               ) : <RailEmpty text="Citation status appears after a workspace is opened." />}
             </div>
@@ -325,4 +379,26 @@ function timeAgo(iso: string): string {
   if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m`;
   if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h`;
   return `${Math.floor(elapsed / 86_400_000)}d`;
+}
+
+function citationStatusLabel(status: CitationScan['sources'][number]['status']): string {
+  const labels: Record<CitationScan['sources'][number]['status'], string> = {
+    not_requested: 'Not requested',
+    unresolved: 'Ready',
+    downloaded: 'Downloaded',
+    metadata_only: 'Metadata only',
+    manual_required: 'Manual needed',
+    blocked_by_license: 'Closed access',
+    ambiguous: 'Ambiguous',
+    failed: 'Failed',
+  };
+  return labels[status];
+}
+
+function citationExternalUrl(source: CitationScan['sources'][number]): string | undefined {
+  if (source.acquisition?.landingPageUrl?.startsWith('https://')) return source.acquisition.landingPageUrl;
+  if (source.identifiers.doi) return `https://doi.org/${source.identifiers.doi.split('/').map(encodeURIComponent).join('/')}`;
+  if (source.identifiers.arxivId) return `https://arxiv.org/abs/${encodeURIComponent(source.identifiers.arxivId)}`;
+  if (source.metadata.url?.startsWith('https://')) return source.metadata.url;
+  return undefined;
 }

@@ -47,5 +47,11 @@ describe('standalone workstation helpers', () => {
     expect(scan.missing).toEqual([{ key: 'missing', path: 'paper.tex', line: 1 }]);
     expect(scan.unused).toEqual(['unused']);
     expect(scan.summary).toEqual({ cited: 2, bibliography: 2, missing: 1, unused: 1 });
+    expect(scan.sources.map((source) => [source.key, source.status])).toEqual([
+      ['known', 'unresolved'],
+      ['missing', 'manual_required'],
+    ]);
+    expect(scan.sourceSummary).toMatchObject({ unresolved: 1, manual_required: 1, downloaded: 0 });
+    expect(scan.audit).toBeNull();
   });
 });

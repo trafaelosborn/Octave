@@ -17,7 +17,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
-- Audits citation keys against workspace BibTeX files.
+- Audits citation keys, retrieves legitimate open full text when available, and builds a source-bound evidence corpus under `citations/`.
 - Searches the workspace, extracts a LaTeX outline, and runs Python or R files into a bounded process log.
 - Constrains file targets for reads, writes, context loading, compilation, and execution to the selected workspace.
 
@@ -52,6 +52,8 @@ OCTAVE_ROOT="$PWD/examples/demo-workspace" npm run dev
 ```
 
 Workspace registrations live in `~/.octave/workspaces.json`. Per-project chats, saved review memos, and pinned-context state live under the selected folder's `.octave/` directory.
+
+To enable DOI open-access discovery, set `OCTAVE_SCHOLARLY_EMAIL` to a real contact address. Citation retrieval remains an explicit **Fetch sources** action; Octave never bypasses publisher access controls. Closed or unresolved papers are placed in a manual queue.
 
 ## Model providers
 
@@ -129,11 +131,14 @@ src/
 
 Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context. Message attachments are separate from pinned context: their extracted snapshots stay on the specific user turn that used them, capped at 25 MB of combined source data and 60,000 extracted characters.
 
+Fetched citation originals, extracted Markdown, JSONL text chunks, provenance, and the claim-to-source audit stay in the visible workspace `citations/` directory. The **Review paper** action includes bounded evidence packets when they exist and tells the model when evidence is missing or stale. A lexical candidate passage is a review lead, not an automatic finding that a claim is supported.
+
 ## Privacy and safety
 
 - Ollama requests go only to the configured server, which defaults to `127.0.0.1`.
 - Anthropic requests send selected document context and conversation messages to Anthropic's API.
 - Existing file targets are checked after symbolic-link resolution.
+- Citation downloads require public HTTPS targets, reject local/private destinations and credentials, revalidate redirects, and enforce time and size limits.
 - New files can be created only under an existing, resolved workspace directory.
 - Executable source is limited to Python and R, runs without a shell, and has a timeout.
 - Python and R execution is a convenience feature, not a sandbox. Run only code you trust.
@@ -142,6 +147,8 @@ Octave persists both project chats and document chats inside the workspace. Docu
 See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research formats, extraction behavior, and limits.
 
 See [docs/REVIEW_MEMOS.md](docs/REVIEW_MEMOS.md) for saved-review storage and source-link behavior.
+
+See [docs/CITATION_CORPUS.md](docs/CITATION_CORPUS.md) for source retrieval, manual imports, evidence packets, and corpus file formats.
 
 See [SECURITY.md](SECURITY.md) for reporting and boundary details.
 
