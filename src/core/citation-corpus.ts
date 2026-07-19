@@ -42,6 +42,7 @@ export interface CitationAcquisition {
   landingPageUrl?: string;
   license?: string;
   version?: string;
+  extractionWarnings?: string[];
 }
 
 export interface CitationAttempt {
@@ -213,7 +214,9 @@ function extractIdentifiers(fields: Record<string, string>): CitationIdentifiers
   const doi = normalizeDoi(fields.doi ?? doiFromUrl(fields.url));
   if (doi) identifiers.doi = doi;
   const arxivId = normalizeArxivId(
-    fields.archiveprefix?.toLowerCase() === 'arxiv' ? fields.eprint : arxivFromUrl(fields.url),
+    fields.archiveprefix?.toLowerCase() === 'arxiv'
+      ? fields.eprint
+      : arxivFromUrl(fields.url) ?? (doi?.startsWith('10.48550/arxiv.') ? doi.slice('10.48550/arxiv.'.length) : undefined),
   );
   if (arxivId) identifiers.arxivId = arxivId;
   const pmid = fields.pmid?.trim();
