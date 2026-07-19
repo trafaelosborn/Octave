@@ -1,5 +1,7 @@
 export * from './chat.js';
 export * from './chat-engine.js';
+export * from './bibtex.js';
+export * from './citation-corpus.js';
 export * from './compile.js';
 export * from './context.js';
 export * from './extract.js';
