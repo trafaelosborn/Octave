@@ -4,7 +4,7 @@ Octave is a local-first research workstation for writing, interrogating, revisin
 
 It began as the research environment inside [Doris](https://github.com/trafaelosborn) and is now an independent application and TypeScript toolkit.
 
-> **Status:** Active early release. The complete standalone workstation is usable today; desktop packaging and additional model providers remain future work.
+> **Status:** Active early release. The workstation is usable today, and a Windows-first Electron developer build is available. Signed public installers remain future work.
 
 ## What it does
 
@@ -50,6 +50,22 @@ On macOS or Linux:
 ```bash
 OCTAVE_ROOT="$PWD/examples/demo-workspace" npm run dev
 ```
+
+### Desktop development
+
+Launch the same workstation in its Electron shell:
+
+```bash
+npm run desktop:dev
+```
+
+Build an unsigned Windows installer and portable ZIP under `desktop/app/out/make/`:
+
+```bash
+npm run desktop:make
+```
+
+The desktop shell starts Octave's server privately on a random loopback port and replaces the browser folder-picker fallback with a native system dialog. See [docs/DESKTOP.md](docs/DESKTOP.md) for architecture, release limitations, and packaging details.
 
 Workspace registrations live in `~/.octave/workspaces.json`. Per-project chats, saved review memos, and pinned-context state live under the selected folder's `.octave/` directory.
 
@@ -122,6 +138,9 @@ app/
   api/         workspace, document, chat, compile, search, citation, and run routes
   components/  editor workstation, chat, PDF, navigation, and revision review
   lib/         workspace registry, context state, diffs, outline, and citation audit
+desktop/
+  app/         Electron main process, secure preload bridge, and Forge configuration
+  *.cjs        desktop development and standalone-runtime preparation scripts
 src/
   core/        safe paths, context assembly, chat orchestration, LaTeX compilation
   providers/   streaming Ollama and Anthropic adapters
@@ -143,12 +162,15 @@ Fetched citation originals, extracted Markdown, JSONL text chunks, provenance, a
 - Executable source is limited to Python and R, runs without a shell, and has a timeout.
 - Python and R execution is a convenience feature, not a sandbox. Run only code you trust.
 - Generated chat, context, build, and dependency directories are excluded from workspace discovery.
+- The Electron renderer is sandboxed, has no Node integration, and receives only a narrow native folder-picker bridge.
 
 See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research formats, extraction behavior, and limits.
 
 See [docs/REVIEW_MEMOS.md](docs/REVIEW_MEMOS.md) for saved-review storage and source-link behavior.
 
 See [docs/CITATION_CORPUS.md](docs/CITATION_CORPUS.md) for source retrieval, manual imports, evidence packets, and corpus file formats.
+
+See [docs/DESKTOP.md](docs/DESKTOP.md) for the Electron runtime and installer workflow.
 
 See [SECURITY.md](SECURITY.md) for reporting and boundary details.
 
@@ -166,7 +188,8 @@ npm pack --dry-run
 
 - Doris feature-convergence work is tracked in [docs/DORIS_CONVERGENCE_ROADMAP.md](docs/DORIS_CONVERGENCE_ROADMAP.md).
 - Richer bibliography workflows
-- Desktop packaging
+- Signed installers and automatic desktop updates
+- Commercial validation and product naming
 
 This project is not affiliated with GNU Octave. The name comes from its origin as a research workspace within Doris.
 

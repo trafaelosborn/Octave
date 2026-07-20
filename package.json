@@ -34,7 +34,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "npm run build:lib && next dev --hostname 127.0.0.1",
+    "dev": "npm run build:lib && npm run dev:web",
+    "dev:web": "next dev --hostname 127.0.0.1",
+    "desktop:dev": "npm run build:lib && node desktop/dev.cjs",
+    "desktop:prepare": "npm run build && node desktop/prepare-runtime.cjs",
+    "desktop:smoke": "node desktop/smoke-runtime.cjs",
+    "desktop:package": "npm run desktop:prepare && node desktop/forge.cjs package",
+    "desktop:make": "npm run desktop:prepare && node desktop/forge.cjs make",
     "build": "npm run build:lib && next build",
     "build:lib": "tsc -p tsconfig.build.json",
     "start": "next start --hostname 127.0.0.1",
@@ -80,9 +86,13 @@
     "postcss": "^8.5.19"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
+    "@electron-forge/maker-zip": "^7.11.2",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "electron": "^43.1.1",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

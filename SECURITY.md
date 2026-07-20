@@ -10,6 +10,8 @@ Binary research formats are extracted into read-only previews. Extraction enforc
 
 The development and production server scripts bind to `127.0.0.1` by default. Octave's API is designed for a single-user local workstation and does not implement network authentication. Do not expose it on a public or untrusted network.
 
+The Electron build selects an ephemeral loopback port, loads only that origin in its application window, blocks cross-origin navigation, and permits only HTTPS links to open externally. Its renderer is sandboxed with Node integration disabled. A context-isolated preload exposes only native workspace-folder selection; privileged Electron APIs are not passed through to application code.
+
 Python and R execution is not a sandbox. Octave validates the selected script path, invokes a fixed interpreter without a shell, bounds captured output, and applies a timeout, but the script still runs with the permissions of the Octave process. Run only code you trust.
 
 The `.octave/` directory inside a workspace contains local chat history. It should not be committed with research material unless that is intentional.

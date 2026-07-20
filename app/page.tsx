@@ -207,6 +207,11 @@ export default function OctavePage() {
     setPickingWorkspace(true);
     setError('');
     try {
+      if (window.octaveDesktop) {
+        const selectedPath = await window.octaveDesktop.pickWorkspace();
+        if (selectedPath) setWorkspacePath(selectedPath);
+        return;
+      }
       const data = await apiJson<{ path: string | null }>('/api/workspaces/pick', { method: 'POST' });
       if (data.path) setWorkspacePath(data.path);
     } finally {

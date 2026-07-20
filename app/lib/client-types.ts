@@ -185,3 +185,14 @@ export interface OutlineItem {
 
 export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'log' | 'pdf';
 export type RailView = 'files' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';
+
+export interface OctaveDesktopBridge {
+  isDesktop: true;
+  pickWorkspace: () => Promise<string | null>;
+}
+
+declare global {
+  interface Window {
+    octaveDesktop?: OctaveDesktopBridge;
+  }
+}
