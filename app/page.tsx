@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPanel } from './components/ChatPanel';
 import { Icon } from './components/Icon';
 import { PdfPane } from './components/PdfPane';
+import { ProviderSettingsDialog } from './components/ProviderSettingsDialog';
 import { RevisionPanel } from './components/RevisionPanel';
 import { ReviewMemoPanel } from './components/ReviewMemoPanel';
 import { WorkspaceRail } from './components/WorkspaceRail';
@@ -14,6 +15,8 @@ import type {
   ChatSessionMeta,
   ChatScope,
   CitationScan,
+  DesktopProviderSettings,
+  DesktopProviderSettingsInput,
   OctaveFile,
   OutlineItem,
   ProviderStatus,
@@ -89,6 +92,9 @@ export default function OctavePage() {
   const [deletingReview, setDeletingReview] = useState(false);
   const [searching, setSearching] = useState(false);
   const [syncingCitations, setSyncingCitations] = useState(false);
+  const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
+  const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
+  const [savingProviderSettings, setSavingProviderSettings] = useState(false);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
@@ -116,20 +122,29 @@ export default function OctavePage() {
   }, []);
 
   async function bootstrap(): Promise<void> {
-    const [workspaceData, providerData] = await Promise.all([
+    const [workspaceData, providerData, desktopSettings] = await Promise.all([
       apiJson<{ workspaces: Workspace[] }>('/api/workspaces'),
       apiJson<{ providers: ProviderStatus[] }>('/api/providers'),
+      window.octaveDesktop?.getProviderSettings() ?? Promise.resolve(null),
     ]);
     setWorkspaces(workspaceData.workspaces);
     setProviders(providerData.providers);
+    if (desktopSettings) {
+      setDesktopProviderSettings(desktopSettings);
+      if (desktopSettings.firstRun) setProviderSettingsOpen(true);
+    }
 
     const savedProvider = window.localStorage.getItem('octave:provider');
-    const preferredProvider = providerData.providers.find((provider) => provider.id === savedProvider && provider.available)
+    const preferredProvider = providerData.providers.find((provider) => provider.id === desktopSettings?.defaultProvider && provider.available)
+      ?? providerData.providers.find((provider) => provider.id === savedProvider && provider.available)
       ?? providerData.providers.find((provider) => provider.id === 'ollama' && provider.available)
       ?? providerData.providers.find((provider) => provider.available);
     if (preferredProvider) {
       setProviderId(preferredProvider.id);
-      setModelId(window.localStorage.getItem(`octave:model:${preferredProvider.id}`) ?? preferredProvider.models[0]?.id ?? '');
+      setModelId(desktopSettings?.models[preferredProvider.id]
+        ?? window.localStorage.getItem(`octave:model:${preferredProvider.id}`)
+        ?? preferredProvider.models[0]?.id
+        ?? '');
     }
 
     const savedWorkspaceId = window.localStorage.getItem('octave:workspace');
@@ -216,6 +231,18 @@ export default function OctavePage() {
       if (data.path) setWorkspacePath(data.path);
     } finally {
       setPickingWorkspace(false);
+    }
+  }
+
+  async function saveDesktopProviderSettings(input: DesktopProviderSettingsInput): Promise<void> {
+    if (!window.octaveDesktop) throw new Error('Provider settings are available only in the desktop app.');
+    setSavingProviderSettings(true);
+    try {
+      const settings = await window.octaveDesktop.saveProviderSettings(input);
+      setDesktopProviderSettings(settings);
+    } catch (problem) {
+      setSavingProviderSettings(false);
+      throw problem;
     }
   }
 
@@ -764,6 +791,11 @@ export default function OctavePage() {
                 {(providers.find((provider) => provider.id === providerId)?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.name ?? model.id}</option>)}
               </select>
             </label>
+            {desktopProviderSettings && (
+              <button className="icon-button provider-settings-button" onClick={() => setProviderSettingsOpen(true)} aria-label="Open AI provider settings" title="AI provider settings">
+                <Icon name="settings" size={16}/>
+              </button>
+            )}
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
             <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT, true).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
@@ -908,6 +940,15 @@ export default function OctavePage() {
           </>
         )}
       </section>
+      {desktopProviderSettings && (
+        <ProviderSettingsDialog
+          open={providerSettingsOpen}
+          settings={desktopProviderSettings}
+          saving={savingProviderSettings}
+          onClose={() => setProviderSettingsOpen(false)}
+          onSave={saveDesktopProviderSettings}
+        />
+      )}
     </main>
   );
 }

@@ -37,20 +37,28 @@ export async function listProviderStatus(): Promise<ProviderStatus[]> {
   const anthropic = new AnthropicProvider();
   const openai = new OpenAIProvider();
   const xai = new XAIProvider();
+  const desktopSetupHint = process.env.OCTAVE_DESKTOP === '1' ? 'Open AI provider settings.' : undefined;
   const providers = [
     { provider: ollama, local: true },
-    { provider: anthropic, local: false, setupHint: 'Set ANTHROPIC_API_KEY in .env.local.' },
-    { provider: openai, local: false, setupHint: 'Set OPENAI_API_KEY in .env.local.' },
-    { provider: xai, local: false, setupHint: 'Set XAI_API_KEY in .env.local.' },
+    { provider: anthropic, local: false, setupHint: desktopSetupHint ?? 'Set ANTHROPIC_API_KEY in .env.local.' },
+    { provider: openai, local: false, setupHint: desktopSetupHint ?? 'Set OPENAI_API_KEY in .env.local.' },
+    { provider: xai, local: false, setupHint: desktopSetupHint ?? 'Set XAI_API_KEY in .env.local.' },
   ];
   const statuses = await Promise.all(providers.map(async ({ provider, local, setupHint }) => {
     const available = await provider.isAvailable?.() ?? true;
+    const models = await provider.listModels?.() ?? [];
+    if (provider.id === 'ollama') {
+      const configuredModel = process.env.OLLAMA_MODEL ?? 'llama3.1';
+      if (!models.some((model) => model.id === configuredModel)) {
+        models.unshift({ id: configuredModel, name: `${configuredModel} (configured default)` });
+      }
+    }
     const status: ProviderStatus = {
       id: provider.id as ProviderId,
       name: provider.name,
       available,
       local,
-      models: await provider.listModels?.() ?? [],
+      models,
     };
     if (!available && setupHint) status.setupHint = setupHint;
     return status;

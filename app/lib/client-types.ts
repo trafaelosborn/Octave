@@ -186,9 +186,31 @@ export interface OutlineItem {
 export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'log' | 'pdf';
 export type RailView = 'files' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';
 
+export type DesktopProviderId = ProviderStatus['id'];
+export type DesktopCloudProviderId = 'anthropic' | 'openai' | 'xai';
+export type DesktopCredentialSource = 'saved' | 'environment' | 'none';
+
+export interface DesktopProviderSettings {
+  firstRun: boolean;
+  encryptionAvailable: boolean;
+  defaultProvider: DesktopProviderId;
+  models: Record<DesktopProviderId, string>;
+  ollamaBaseUrl: string;
+  credentialSources: Record<DesktopCloudProviderId, DesktopCredentialSource>;
+}
+
+export interface DesktopProviderSettingsInput {
+  defaultProvider: DesktopProviderId;
+  models: Record<DesktopProviderId, string>;
+  ollamaBaseUrl: string;
+  credentials: Partial<Record<DesktopCloudProviderId, string | null>>;
+}
+
 export interface OctaveDesktopBridge {
   isDesktop: true;
+  getProviderSettings: () => Promise<DesktopProviderSettings>;
   pickWorkspace: () => Promise<string | null>;
+  saveProviderSettings: (settings: DesktopProviderSettingsInput) => Promise<DesktopProviderSettings>;
 }
 
 declare global {

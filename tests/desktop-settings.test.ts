@@ -1,0 +1,129 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { afterEach, describe, expect, it } from 'vitest';
+
+const require = createRequire(import.meta.url);
+const { createProviderSettingsStore } = require('../desktop/app/provider-settings.cjs') as {
+  createProviderSettingsStore: (options: {
+    filePath: string;
+    encryption: {
+      isAvailable: () => boolean;
+      encrypt: (value: string) => string;
+      decrypt: (value: string) => string;
+    };
+    environment?: Record<string, string | undefined>;
+  }) => {
+    getEnvironment: () => Promise<Record<string, string>>;
+    getPublicSettings: () => Promise<{
+      firstRun: boolean;
+      encryptionAvailable: boolean;
+      defaultProvider: string;
+      models: Record<string, string>;
+      credentialSources: Record<string, string>;
+    }>;
+    save: (input: unknown) => Promise<unknown>;
+  };
+};
+
+const temporaryDirectories: string[] = [];
+const encryption = {
+  isAvailable: () => true,
+  encrypt: (value: string) => Buffer.from(`protected:${value}`, 'utf8').toString('base64'),
+  decrypt: (value: string) => Buffer.from(value, 'base64').toString('utf8').replace(/^protected:/, ''),
+};
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
+});
+
+describe('Electron provider settings', () => {
+  it('uses environment configuration before first-run setup is completed', async () => {
+    const { store } = await createStore({
+      OPENAI_API_KEY: 'environment-secret',
+      OPENAI_MODEL: 'gpt-environment',
+      OCTAVE_DEFAULT_PROVIDER: 'openai',
+    });
+
+    const settings = await store.getPublicSettings();
+    const environment = await store.getEnvironment();
+
+    expect(settings).toMatchObject({
+      firstRun: true,
+      defaultProvider: 'openai',
+      credentialSources: { openai: 'environment' },
+    });
+    expect(settings.models.openai).toBe('gpt-environment');
+    expect(environment.OPENAI_API_KEY).toBe('environment-secret');
+    expect(environment.OPENAI_MODEL).toBeUndefined();
+  });
+
+  it('encrypts saved keys and exposes them only to the local server environment', async () => {
+    const { filePath, store } = await createStore();
+    await store.save(settingsInput({ openai: 'sk-super-secret' }));
+
+    const persisted = await fs.readFile(filePath, 'utf8');
+    const settings = await store.getPublicSettings();
+    const environment = await store.getEnvironment();
+
+    expect(persisted).not.toContain('sk-super-secret');
+    expect(settings).toMatchObject({
+      firstRun: false,
+      defaultProvider: 'openai',
+      credentialSources: { openai: 'saved' },
+    });
+    expect(environment).toMatchObject({
+      OCTAVE_DEFAULT_PROVIDER: 'openai',
+      OPENAI_API_KEY: 'sk-super-secret',
+      OPENAI_MODEL: 'gpt-test',
+      OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
+    });
+  });
+
+  it('removes a saved key without erasing an environment credential', async () => {
+    const { store } = await createStore({ OPENAI_API_KEY: 'environment-secret' });
+    await store.save(settingsInput({ openai: 'saved-secret' }));
+    await store.save(settingsInput({ openai: null }));
+
+    expect(await store.getPublicSettings()).toMatchObject({ credentialSources: { openai: 'environment' } });
+    expect(await store.getEnvironment()).toMatchObject({ OPENAI_API_KEY: 'environment-secret' });
+  });
+
+  it('rejects plaintext credential storage and unsafe Ollama URLs', async () => {
+    const { filePath } = await createStore();
+    const unavailableStore = createProviderSettingsStore({
+      filePath,
+      encryption: { ...encryption, isAvailable: () => false },
+      environment: {},
+    });
+
+    await expect(unavailableStore.save(settingsInput({ openai: 'secret' }))).rejects.toThrow('Secure credential storage');
+    await expect(unavailableStore.save({ ...settingsInput({}), ollamaBaseUrl: 'file:///C:/secrets' })).rejects.toThrow('HTTP or HTTPS');
+  });
+});
+
+async function createStore(environment: Record<string, string | undefined> = {}) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'octave-provider-settings-'));
+  temporaryDirectories.push(directory);
+  const filePath = path.join(directory, 'provider-settings.json');
+  return {
+    filePath,
+    store: createProviderSettingsStore({ filePath, encryption, environment }),
+  };
+}
+
+function settingsInput(credentials: Record<string, string | null>) {
+  return {
+    defaultProvider: 'openai',
+    models: {
+      demo: 'demo',
+      ollama: 'llama-test',
+      anthropic: 'claude-test',
+      openai: 'gpt-test',
+      xai: 'grok-test',
+    },
+    ollamaBaseUrl: 'http://127.0.0.1:11434',
+    credentials,
+  };
+}

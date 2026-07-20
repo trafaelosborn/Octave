@@ -10,11 +10,11 @@ Development and desktop releases use the same React interface and Node-backed ro
 Electron main process
   ├─ starts the local Next.js server on 127.0.0.1 with an ephemeral port
   ├─ opens a sandboxed BrowserWindow on that exact origin
-  ├─ owns the native workspace-folder dialog
+  ├─ owns native folder selection and encrypted provider settings
   └─ stops the server when Octave quits
 
 Electron preload
-  └─ exposes only pickWorkspace() through a context-isolated bridge
+  └─ exposes a narrow, context-isolated desktop bridge
 
 Next.js standalone runtime
   └─ serves the existing UI and workspace-bound API routes
@@ -34,6 +34,12 @@ npm run desktop:dev
 ```
 
 The ordinary browser workflow remains available through `npm run dev`.
+
+## Provider settings
+
+On first run, the desktop app asks for a default provider and model. OpenAI, xAI, and Anthropic keys are encrypted with Electron `safeStorage` and stored as ciphertext in `provider-settings.json` beneath Electron's per-user application-data directory. The renderer receives only `saved`, `environment`, or `none` status for each credential; saved secret values are never read back into the interface.
+
+Ollama's server URL and model default are not secrets and live in the same settings document. Saving settings restarts Octave's private local server so the new configuration takes effect. Existing environment variables remain fallback configuration when no desktop key has been saved.
 
 ## Packaging
 
@@ -57,6 +63,5 @@ The production shell stores its workspace registry beneath Electron's per-user a
 
 - Installer artifacts are unsigned and intended for developer testing. Public releases need Windows signing and macOS signing/notarization.
 - Automatic updates and release publishing are not configured.
-- Provider credentials still come from environment configuration; a native settings and credential-storage flow is a separate milestone.
 - The current makers target Windows. macOS and Linux packaging require platform-specific makers, CI runners, and testing.
 - Electron uses Chromium internally, so the desktop build favors compatibility with Octave's Node architecture over minimum download size.

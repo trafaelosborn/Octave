@@ -10,7 +10,7 @@ Binary research formats are extracted into read-only previews. Extraction enforc
 
 The development and production server scripts bind to `127.0.0.1` by default. Octave's API is designed for a single-user local workstation and does not implement network authentication. Do not expose it on a public or untrusted network.
 
-The Electron build selects an ephemeral loopback port, loads only that origin in its application window, blocks cross-origin navigation, and permits only HTTPS links to open externally. Its renderer is sandboxed with Node integration disabled. A context-isolated preload exposes only native workspace-folder selection; privileged Electron APIs are not passed through to application code.
+The Electron build selects an ephemeral loopback port, loads only that origin in its application window, blocks cross-origin navigation, and permits only HTTPS links to open externally. Its renderer is sandboxed with Node integration disabled. A context-isolated preload exposes narrow workspace-folder and provider-settings operations; general privileged Electron APIs are not passed through to application code. Each privileged request validates that it came from Octave's private application origin.
 
 Python and R execution is not a sandbox. Octave validates the selected script path, invokes a fixed interpreter without a shell, bounds captured output, and applies a timeout, but the script still runs with the permissions of the Octave process. Run only code you trust.
 
@@ -26,7 +26,7 @@ Octave queries scholarly metadata and legitimate open-access locations; it does 
 
 Ollama requests remain on the configured Ollama host. Anthropic, OpenAI, and xAI requests send the selected document context and conversation to the chosen provider. A citation-aware paper review can include bounded passages from the local citation corpus. Octave never sends documents to a model provider until a chat request is made with that provider.
 
-Store API keys in environment variables. Never commit `.env` files.
+Desktop API keys are encrypted through Electron `safeStorage`, bound to the operating-system user account, and persisted only as ciphertext in Electron's per-user application-data directory. Decrypted keys are injected into the private loopback server process and are never returned to the renderer. Browser and CLI users should store keys in environment variables. Never commit `.env` files.
 
 ## Reporting a vulnerability
 

@@ -81,7 +81,9 @@ Octave discovers providers at startup:
 - **OpenAI:** available when `OPENAI_API_KEY` is set.
 - **xAI / Grok:** available when `XAI_API_KEY` is set.
 
-Copy `.env.example` to `.env.local` to set persistent local defaults. The selected provider determines where document context is processed.
+The Electron app opens provider setup on first run. It can save OpenAI, xAI, and Anthropic keys with operating-system-backed encryption, configure Ollama, and choose default models without exposing saved keys back to the renderer. Use the settings button beside the AI picker to change them later; Octave restarts its private server to apply changes.
+
+Browser and CLI users can copy `.env.example` to `.env.local` to set persistent local defaults. Existing environment variables remain valid in Electron when a provider has no saved desktop key. The selected provider determines where document context is processed.
 
 ## Reviewable revisions
 

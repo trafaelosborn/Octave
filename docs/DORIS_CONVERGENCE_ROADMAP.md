@@ -59,4 +59,5 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Resolve product naming and trademark risk before signing or selling installers.
    - Recruit a 10–20 researcher founder cohort and test willingness to pay with a real purchase rather than a survey.
    - Define the durable boundary between the MIT community core, official desktop distribution, and any paid Pro or hosted capabilities.
-   - Add signed installers, automatic updates, first-run onboarding, recovery, and support diagnostics before a broad paid release.
+   - Native first-run provider setup and OS-encrypted API-key storage are implemented in the Electron app.
+   - Add signed installers, automatic updates, broader onboarding, recovery, and support diagnostics before a broad paid release.
