@@ -7,6 +7,7 @@ import { PdfPane } from './components/PdfPane';
 import { ProviderSettingsDialog } from './components/ProviderSettingsDialog';
 import { RevisionPanel } from './components/RevisionPanel';
 import { ReviewMemoPanel } from './components/ReviewMemoPanel';
+import { SubmissionPanel } from './components/SubmissionPanel';
 import { WorkspaceRail } from './components/WorkspaceRail';
 import type {
   ChatAttachment,
@@ -25,6 +26,10 @@ import type {
   ReviewMemoMeta,
   RevisionPreview,
   SearchResult,
+  SubmissionManifest,
+  SubmissionPackage,
+  SubmissionPreflight,
+  SubmissionState,
   WorkView,
   Workspace,
 } from './lib/client-types';
@@ -95,6 +100,10 @@ export default function OctavePage() {
   const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
   const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [savingProviderSettings, setSavingProviderSettings] = useState(false);
+  const [submissionManifest, setSubmissionManifest] = useState<SubmissionManifest | null>(null);
+  const [submissionPreflight, setSubmissionPreflight] = useState<SubmissionPreflight | null>(null);
+  const [submissionPackages, setSubmissionPackages] = useState<SubmissionPackage[]>([]);
+  const [submissionBusy, setSubmissionBusy] = useState<'loading' | 'saving' | 'preflight' | 'package' | null>(null);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
@@ -164,6 +173,9 @@ export default function OctavePage() {
     setRevision(null);
     setAttachmentPaths([]);
     setActiveReview(null);
+    setSubmissionManifest(null);
+    setSubmissionPreflight(null);
+    setSubmissionPackages([]);
 
     const [fileData, contextData, chatData, reviewData, citationData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
@@ -243,6 +255,39 @@ export default function OctavePage() {
     } catch (problem) {
       setSavingProviderSettings(false);
       throw problem;
+    }
+  }
+
+  async function openSubmissionDesk(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    setWorkView('submission');
+    setSubmissionBusy('loading');
+    setError('');
+    try {
+      const data = await apiJson<SubmissionState>(`/api/submissions?workspaceId=${encodeURIComponent(activeWorkspaceId)}&documentPath=${encodeURIComponent(selectedPath)}`);
+      setSubmissionManifest(data.manifest);
+      setSubmissionPreflight(data.preflight);
+      setSubmissionPackages(data.packages);
+    } finally {
+      setSubmissionBusy(null);
+    }
+  }
+
+  async function runSubmissionAction(action: 'save' | 'preflight' | 'package'): Promise<void> {
+    if (!activeWorkspaceId || !submissionManifest) return;
+    setSubmissionBusy(action === 'save' ? 'saving' : action);
+    setError('');
+    try {
+      const data = await apiJson<SubmissionState>('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, action, manifest: submissionManifest }),
+      });
+      setSubmissionManifest(data.manifest);
+      setSubmissionPreflight(data.preflight);
+      setSubmissionPackages(data.packages);
+    } finally {
+      setSubmissionBusy(null);
     }
   }
 
@@ -799,6 +844,7 @@ export default function OctavePage() {
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
             <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT, true).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
+            <button className="button button-quiet submission-button" disabled={!activeWorkspaceId || submissionBusy !== null} onClick={() => openSubmissionDesk().catch(showError)}><Icon name="file" size={15}/>Submit</button>
             <button className="button button-primary" disabled={!selectedPath || !dirty || saving || documentReadOnly} onClick={guard(() => saveDocument())}>{documentReadOnly ? 'Read only' : saving ? 'Saving...' : 'Save'}</button>
           </div>
         </header>
@@ -824,10 +870,11 @@ export default function OctavePage() {
                 ['chat', 'Chat'],
                 ['review', revision ? `Review (${revisionHunks.length})` : 'Review'],
                 ...(activeReview ? [['memo', 'Memo'] as [WorkView, string]] : []),
+                ['submission', 'Submission'],
                 ['log', 'Log'],
                 ['pdf', 'PDF'],
               ] as Array<[WorkView, string]>).map(([view, label]) => (
-                <button key={view} className={workView === view ? 'active' : ''} onClick={() => setWorkView(view)}>{label}</button>
+                <button key={view} className={workView === view ? 'active' : ''} onClick={() => view === 'submission' ? openSubmissionDesk().catch(showError) : setWorkView(view)}>{label}</button>
               ))}
             </nav>
 
@@ -911,6 +958,19 @@ export default function OctavePage() {
                     deleting={deletingReview}
                     onOpenSourceChat={(chatId) => loadChat(chatId).catch(showError)}
                     onDelete={(review) => deleteReviewMemo(review).catch(showError)}
+                  />
+                )}
+
+                {workView === 'submission' && (
+                  <SubmissionPanel
+                    manifest={submissionManifest}
+                    preflight={submissionPreflight}
+                    packages={submissionPackages}
+                    files={files}
+                    workspaceId={activeWorkspaceId}
+                    busy={submissionBusy}
+                    onManifest={setSubmissionManifest}
+                    onAction={(action) => runSubmissionAction(action).catch(showError)}
                   />
                 )}
 

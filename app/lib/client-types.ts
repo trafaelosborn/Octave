@@ -161,6 +161,84 @@ export interface RevisionPreview {
   after: string;
 }
 
+export type SubmissionProfileId = 'generic' | 'anonymous-conference' | 'arxiv';
+export type SubmissionIssueSeverity = 'error' | 'warning' | 'manual';
+
+export interface SubmissionAuthor {
+  name: string;
+  email?: string;
+  affiliation?: string;
+  orcid?: string;
+  corresponding?: boolean;
+}
+
+export interface SubmissionManifest {
+  version: 1;
+  title: string;
+  abstract: string;
+  authors: SubmissionAuthor[];
+  keywords: string[];
+  manuscriptPath: string;
+  supplementaryFiles: string[];
+  venue: {
+    profile: SubmissionProfileId;
+    name: string;
+    articleType: string;
+    maxPages?: number;
+  };
+  declarations: {
+    authorshipConfirmed: boolean;
+    conflictsReviewed: boolean;
+    fundingReviewed: boolean;
+    ethicsReviewed: boolean;
+    licenseReviewed: boolean;
+  };
+  updatedAt: string;
+}
+
+export interface SubmissionIssue {
+  severity: SubmissionIssueSeverity;
+  code: string;
+  message: string;
+  path?: string;
+  line?: number;
+}
+
+export interface SubmissionPreflight {
+  generatedAt: string;
+  ready: boolean;
+  packageable: boolean;
+  manuscriptPdfPath?: string;
+  pdfPages?: number;
+  sourceFiles: string[];
+  totalSourceBytes: number;
+  issues: SubmissionIssue[];
+  summary: Record<SubmissionIssueSeverity, number>;
+}
+
+export interface SubmissionArtifact {
+  name: string;
+  bytes: number;
+  sha256: string;
+}
+
+export interface SubmissionPackage {
+  id: string;
+  createdAt: string;
+  directory: string;
+  title: string;
+  venue: string;
+  artifacts: SubmissionArtifact[];
+  preflight: SubmissionPreflight;
+}
+
+export interface SubmissionState {
+  manifest: SubmissionManifest;
+  preflight: SubmissionPreflight;
+  packages: SubmissionPackage[];
+  created?: SubmissionPackage;
+}
+
 export interface ReviewMemo {
   id: string;
   title: string;
@@ -183,7 +261,7 @@ export interface OutlineItem {
   line: number;
 }
 
-export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'log' | 'pdf';
+export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'submission' | 'log' | 'pdf';
 export type RailView = 'files' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';
 
 export type DesktopProviderId = ProviderStatus['id'];

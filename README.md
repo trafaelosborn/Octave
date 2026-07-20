@@ -18,6 +18,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
 - Audits citation keys, retrieves legitimate open full text when available, and builds a source-bound evidence corpus under `citations/`.
+- Preflights a paper for submission and builds a bounded upload bundle with portal metadata, PDF, TeX dependencies, supplements, reports, and checksums.
 - Searches the workspace, extracts a LaTeX outline, and runs Python or R files into a bounded process log.
 - Constrains file targets for reads, writes, context loading, compilation, and execution to the selected workspace.
 
@@ -96,6 +97,12 @@ The revision path is deliberately separate from ordinary chat:
 
 The source file is not modified until step four.
 
+## Submission Desk
+
+Choose **Submit** in the workstation to prepare an upload set without copying the entire workspace. Octave stores reusable portal metadata in `.octave/submission.json`, follows local TeX dependencies, checks the compiled PDF and bibliography, scans text sources for likely credentials and draft markers, and adds profile-specific checks for anonymous conferences or arXiv.
+
+A successful package is written under `.octave/submissions/` with the final PDF, a source ZIP when applicable, selected supplements, the manifest, a preflight report, SHA-256 checksums, and a downloadable bundle. Authorship approval, conflicts, funding, ethics, licensing, and the final portal action remain explicit human decisions. Octave does not claim that a generic package satisfies an unconfigured venue's current rules.
+
 ## CLI and library
 
 The UI is backed by a separately exportable core. Build it with:
@@ -137,7 +144,7 @@ console.log(result.assistantMessage.content);
 
 ```text
 app/
-  api/         workspace, document, chat, compile, search, citation, and run routes
+  api/         workspace, document, chat, compile, search, citation, submission, and run routes
   components/  editor workstation, chat, PDF, navigation, and revision review
   lib/         workspace registry, context state, diffs, outline, and citation audit
 desktop/
@@ -171,6 +178,8 @@ See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research 
 See [docs/REVIEW_MEMOS.md](docs/REVIEW_MEMOS.md) for saved-review storage and source-link behavior.
 
 See [docs/CITATION_CORPUS.md](docs/CITATION_CORPUS.md) for source retrieval, manual imports, evidence packets, and corpus file formats.
+
+See [docs/SUBMISSION_DESK.md](docs/SUBMISSION_DESK.md) for profiles, preflight checks, package contents, and automation boundaries.
 
 See [docs/DESKTOP.md](docs/DESKTOP.md) for the Electron runtime and installer workflow.
 

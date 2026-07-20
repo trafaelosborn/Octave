@@ -16,6 +16,12 @@ Python and R execution is not a sandbox. Octave validates the selected script pa
 
 The `.octave/` directory inside a workspace contains local chat history. It should not be committed with research material unless that is intentional.
 
+## Submission packaging
+
+Submission manifests and generated packages stay under `.octave/`. Manuscript, source-dependency, supplement, package, and download paths are normalized and confined to the selected workspace after symbolic-link resolution. Packaging accepts an explicit extension allowlist and enforces file-count and byte limits before creating ZIP archives.
+
+Preflight scans bounded text inputs for common credential and private-key patterns, but it is a guardrail rather than a complete secret detector. Inspect every generated bundle before uploading it. Octave records human declarations for authorship, conflicts, funding, ethics, and licensing; it does not infer them or perform the final submission action.
+
 ## Citation retrieval
 
 Citation retrieval runs only after the user selects **Fetch sources**. Remote downloads must use HTTPS, cannot contain URL credentials, and are rejected when DNS resolves to a local, private, or non-routable address. Every redirect is checked again. Metadata responses, source downloads, redirect counts, request duration, file signatures, and extracted text are bounded.

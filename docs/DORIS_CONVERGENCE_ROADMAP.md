@@ -61,3 +61,9 @@ This roadmap tracks research-workstation capabilities that should move from Dori
    - Define the durable boundary between the MIT community core, official desktop distribution, and any paid Pro or hosted capabilities.
    - Native first-run provider setup and OS-encrypted API-key storage are implemented in the Electron app.
    - Add signed installers, automatic updates, broader onboarding, recovery, and support diagnostics before a broad paid release.
+
+13. **Submission automation** — universal packager and preflight implemented
+   - The Submission Desk persists structured portal metadata, follows local TeX dependencies, checks the exact PDF/source/supplement upload set, and builds immutable bundles with reports and SHA-256 checksums.
+   - Generic journal, anonymous-conference, and arXiv profiles are available; legal, ethical, authorship, and final-submit decisions remain human confirmations.
+   - Next: add an OpenReview API2 connector with an explicit preview, draft-first behavior, resumable status, and a separate user confirmation before transmission.
+   - Later: explore visible browser assistants for ScholarOne and Editorial Manager. Do not store portal passwords, bypass MFA or CAPTCHA, or click the final submit control without an immediate user confirmation.
