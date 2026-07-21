@@ -2,10 +2,11 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 const CLOUD_PROVIDERS = ['anthropic', 'openai', 'xai'];
-const PROVIDERS = ['demo', 'ollama', ...CLOUD_PROVIDERS];
+const PROVIDERS = ['demo', 'ollama', 'cli', ...CLOUD_PROVIDERS];
 const DEFAULT_MODELS = Object.freeze({
   demo: 'demo',
   ollama: 'llama3.1',
+  cli: 'cli',
   anthropic: 'claude-sonnet-4-20250514',
   openai: 'gpt-5.6-sol',
   xai: 'grok-4.5-latest',
@@ -17,6 +18,7 @@ const KEY_ENVIRONMENT_VARIABLES = Object.freeze({
 });
 const MODEL_ENVIRONMENT_VARIABLES = Object.freeze({
   ollama: 'OLLAMA_MODEL',
+  cli: 'OCTAVE_CLI_MODEL',
   anthropic: 'ANTHROPIC_MODEL',
   openai: 'OPENAI_MODEL',
   xai: 'XAI_MODEL',
@@ -75,6 +77,8 @@ function defaultDocument() {
     defaultProvider: 'demo',
     models: { ...DEFAULT_MODELS },
     ollamaBaseUrl: 'http://127.0.0.1:11434',
+    cliCommand: '',
+    cliArgs: '',
     credentials: {},
   };
 }
@@ -96,6 +100,8 @@ function normalizeStoredDocument(value) {
     defaultProvider: PROVIDERS.includes(value.defaultProvider) ? value.defaultProvider : defaults.defaultProvider,
     models: Object.fromEntries(PROVIDERS.map((provider) => [provider, normalizeModel(models[provider], defaults.models[provider])])),
     ollamaBaseUrl: normalizeOllamaUrl(value.ollamaBaseUrl, defaults.ollamaBaseUrl),
+    cliCommand: normalizeCommand(value.cliCommand, defaults.cliCommand),
+    cliArgs: normalizeCliArgs(value.cliArgs, defaults.cliArgs),
     credentials: normalizedCredentials,
   };
 }
@@ -129,6 +135,8 @@ function normalizeInput(input, current, encryption) {
       normalizeModel(input.models[provider], current.models[provider]),
     ])),
     ollamaBaseUrl: normalizeOllamaUrl(input.ollamaBaseUrl, current.ollamaBaseUrl),
+    cliCommand: normalizeCommand(input.cliCommand, current.cliCommand),
+    cliArgs: normalizeCliArgs(input.cliArgs, current.cliArgs),
     credentials,
   };
 }
@@ -158,6 +166,12 @@ function toPublicSettings(document, encryption, environment) {
     ollamaBaseUrl: !document.completed && environment.OLLAMA_BASE_URL
       ? normalizeOllamaUrl(environment.OLLAMA_BASE_URL, document.ollamaBaseUrl)
       : document.ollamaBaseUrl,
+    cliCommand: !document.completed && environment.OCTAVE_CLI_COMMAND
+      ? normalizeCommand(environment.OCTAVE_CLI_COMMAND, document.cliCommand)
+      : document.cliCommand,
+    cliArgs: !document.completed && environment.OCTAVE_CLI_ARGS
+      ? normalizeCliArgs(environment.OCTAVE_CLI_ARGS, document.cliArgs)
+      : document.cliArgs,
     credentialSources,
   };
 }
@@ -167,6 +181,8 @@ function toEnvironment(document, encryption, environment) {
   if (document.completed) {
     result.OCTAVE_DEFAULT_PROVIDER = document.defaultProvider;
     result.OLLAMA_BASE_URL = document.ollamaBaseUrl;
+    result.OCTAVE_CLI_COMMAND = document.cliCommand;
+    result.OCTAVE_CLI_ARGS = document.cliArgs;
     for (const [provider, variable] of Object.entries(MODEL_ENVIRONMENT_VARIABLES)) {
       result[variable] = document.models[provider];
     }
@@ -210,6 +226,22 @@ function normalizeOllamaUrl(value, fallback) {
     throw new Error('Ollama URL must be an HTTP or HTTPS address without embedded credentials.');
   }
   return parsed.toString().replace(/\/$/, '');
+}
+
+function normalizeCommand(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim();
+  if (normalized.length > 2_000) throw new Error('CLI command is too long.');
+  if (/[\r\n]/.test(normalized)) throw new Error('CLI command must fit on one line.');
+  return normalized;
+}
+
+function normalizeCliArgs(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim();
+  if (normalized.length > 8_000) throw new Error('CLI arguments are too long.');
+  if (/[\r\n]/.test(normalized)) throw new Error('CLI arguments must fit on one line.');
+  return normalized;
 }
 
 module.exports = {

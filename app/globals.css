@@ -572,6 +572,7 @@ button { border: 0; }
 .provider-settings-name small { color: var(--muted); font-size: 9px; line-height: 1.35; }
 .settings-field { color: #44514d; display: grid; font-size: 9px; font-weight: 800; gap: 5px; letter-spacing: .06em; text-transform: uppercase; }
 .settings-field input, .settings-field select { background: #fff; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 400; letter-spacing: 0; min-width: 0; padding: 9px 10px; text-transform: none; width: 100%; }
+.settings-field-spaced { margin-top: 12px; }
 .credential-remove { align-self: center; color: var(--danger); font-size: 9px; max-width: 80px; }
 .settings-field-grid { display: grid; gap: 12px; grid-template-columns: 1.4fr 1fr; }
 .settings-error { background: var(--danger-soft); border: 1px solid #eccbc9; border-radius: 7px; color: #853838; font-size: 11px; margin: 14px 0; padding: 10px 12px; }

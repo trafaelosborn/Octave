@@ -59,7 +59,7 @@ export interface ChatSessionMeta {
 }
 
 export interface ProviderStatus {
-  id: 'ollama' | 'anthropic' | 'openai' | 'xai' | 'demo';
+  id: 'ollama' | 'cli' | 'anthropic' | 'openai' | 'xai' | 'demo';
   name: string;
   available: boolean;
   local: boolean;
@@ -274,6 +274,8 @@ export interface DesktopProviderSettings {
   defaultProvider: DesktopProviderId;
   models: Record<DesktopProviderId, string>;
   ollamaBaseUrl: string;
+  cliCommand: string;
+  cliArgs: string;
   credentialSources: Record<DesktopCloudProviderId, DesktopCredentialSource>;
 }
 
@@ -281,6 +283,8 @@ export interface DesktopProviderSettingsInput {
   defaultProvider: DesktopProviderId;
   models: Record<DesktopProviderId, string>;
   ollamaBaseUrl: string;
+  cliCommand: string;
+  cliArgs: string;
   credentials: Partial<Record<DesktopCloudProviderId, string | null>>;
 }
 

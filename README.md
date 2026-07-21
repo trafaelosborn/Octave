@@ -14,7 +14,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Keeps durable project and document chats, with document conversations fixed to their source file.
 - Attaches up to eight supported project files to an individual message as bounded, durable extraction snapshots.
 - Saves completed model responses as linked Markdown review memos that remain readable outside Octave.
-- Streams responses from local Ollama models, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
+- Streams responses from local Ollama models, command-line AI tools, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
 - Audits citation keys, retrieves legitimate open full text when available, and builds a source-bound evidence corpus under `citations/`.
@@ -78,11 +78,12 @@ Octave discovers providers at startup:
 
 - **Offline demo:** always available; useful for exploring the workflow without model access.
 - **Ollama:** available when an Ollama server responds at `OLLAMA_BASE_URL`, defaulting to `http://127.0.0.1:11434`.
+- **Command-line AI:** available when `OCTAVE_CLI_COMMAND` names an installed executable. Octave passes the assembled research prompt to stdin unless `OCTAVE_CLI_ARGS` contains `{prompt}`.
 - **Anthropic:** available when `ANTHROPIC_API_KEY` is set.
 - **OpenAI:** available when `OPENAI_API_KEY` is set.
 - **xAI / Grok:** available when `XAI_API_KEY` is set.
 
-The Electron app opens provider setup on first run. It can save OpenAI, xAI, and Anthropic keys with operating-system-backed encryption, configure Ollama, and choose default models without exposing saved keys back to the renderer. Use the settings button beside the AI picker to change them later; Octave restarts its private server to apply changes.
+The Electron app opens provider setup on first run. It can save OpenAI, xAI, and Anthropic keys with operating-system-backed encryption, configure Ollama or a command-line AI tool, and choose default models without exposing saved keys back to the renderer. Use the settings button beside the AI picker to change them later; Octave restarts its private server to apply changes.
 
 Browser and CLI users can copy `.env.example` to `.env.local` to set persistent local defaults. Existing environment variables remain valid in Electron when a provider has no saved desktop key. The selected provider determines where document context is processed.
 
@@ -117,6 +118,12 @@ Commands can also run directly from TypeScript during development:
 ```bash
 npx tsx src/cli.ts chat "Stress-test the central claim" --workspace examples/demo-workspace --document paper.tex
 npx tsx src/cli.ts compile paper.tex --workspace examples/demo-workspace --engine pdflatex
+```
+
+Use `--provider cli` to route Octave through an installed AI command instead of a direct API:
+
+```bash
+OCTAVE_CLI_COMMAND=codex OCTAVE_CLI_ARGS="exec -" npx tsx src/cli.ts chat "Review the methods section" --workspace examples/demo-workspace --document paper.tex --provider cli
 ```
 
 Library usage:

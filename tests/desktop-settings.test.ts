@@ -21,6 +21,8 @@ const { createProviderSettingsStore } = require('../desktop/app/provider-setting
       encryptionAvailable: boolean;
       defaultProvider: string;
       models: Record<string, string>;
+      cliCommand: string;
+      cliArgs: string;
       credentialSources: Record<string, string>;
     }>;
     save: (input: unknown) => Promise<unknown>;
@@ -81,6 +83,32 @@ describe('Electron provider settings', () => {
     });
   });
 
+  it('persists command-line provider configuration without treating it as a credential', async () => {
+    const { store } = await createStore();
+    await store.save({
+      ...settingsInput({}),
+      defaultProvider: 'cli',
+      cliCommand: 'codex',
+      cliArgs: 'exec --model gpt-test -',
+    });
+
+    const settings = await store.getPublicSettings();
+    const environment = await store.getEnvironment();
+
+    expect(settings).toMatchObject({
+      firstRun: false,
+      defaultProvider: 'cli',
+      cliCommand: 'codex',
+      cliArgs: 'exec --model gpt-test -',
+    });
+    expect(environment).toMatchObject({
+      OCTAVE_DEFAULT_PROVIDER: 'cli',
+      OCTAVE_CLI_COMMAND: 'codex',
+      OCTAVE_CLI_ARGS: 'exec --model gpt-test -',
+      OCTAVE_CLI_MODEL: 'cli-test',
+    });
+  });
+
   it('removes a saved key without erasing an environment credential', async () => {
     const { store } = await createStore({ OPENAI_API_KEY: 'environment-secret' });
     await store.save(settingsInput({ openai: 'saved-secret' }));
@@ -119,11 +147,14 @@ function settingsInput(credentials: Record<string, string | null>) {
     models: {
       demo: 'demo',
       ollama: 'llama-test',
+      cli: 'cli-test',
       anthropic: 'claude-test',
       openai: 'gpt-test',
       xai: 'grok-test',
     },
     ollamaBaseUrl: 'http://127.0.0.1:11434',
+    cliCommand: '',
+    cliArgs: '',
     credentials,
   };
 }

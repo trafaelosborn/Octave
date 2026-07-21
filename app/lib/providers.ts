@@ -1,5 +1,6 @@
 import {
   AnthropicProvider,
+  CliProvider,
   OllamaProvider,
   OpenAIProvider,
   XAIProvider,
@@ -8,7 +9,7 @@ import {
   type StreamChatOptions,
 } from '@trafaelosborn/octave/providers';
 
-export type ProviderId = 'ollama' | 'anthropic' | 'openai' | 'xai' | 'demo';
+export type ProviderId = 'ollama' | 'cli' | 'anthropic' | 'openai' | 'xai' | 'demo';
 
 export interface ProviderStatus {
   id: ProviderId;
@@ -27,19 +28,22 @@ export function createProvider(providerId: string, model?: string): LLMProvider 
   if (providerId === 'ollama') {
     return model ? new OllamaProvider({ model }) : new OllamaProvider();
   }
+  if (providerId === 'cli') return model ? new CliProvider({ model }) : new CliProvider();
   if (providerId === 'openai') return model ? new OpenAIProvider({ model }) : new OpenAIProvider();
   if (providerId === 'xai') return model ? new XAIProvider({ model }) : new XAIProvider();
-  throw new Error('Provider must be ollama, anthropic, openai, xai, or demo.');
+  throw new Error('Provider must be ollama, cli, anthropic, openai, xai, or demo.');
 }
 
 export async function listProviderStatus(): Promise<ProviderStatus[]> {
   const ollama = new OllamaProvider();
+  const cli = new CliProvider();
   const anthropic = new AnthropicProvider();
   const openai = new OpenAIProvider();
   const xai = new XAIProvider();
   const desktopSetupHint = process.env.OCTAVE_DESKTOP === '1' ? 'Open AI provider settings.' : undefined;
   const providers = [
     { provider: ollama, local: true },
+    { provider: cli, local: true, setupHint: desktopSetupHint ?? 'Set OCTAVE_CLI_COMMAND in .env.local.' },
     { provider: anthropic, local: false, setupHint: desktopSetupHint ?? 'Set ANTHROPIC_API_KEY in .env.local.' },
     { provider: openai, local: false, setupHint: desktopSetupHint ?? 'Set OPENAI_API_KEY in .env.local.' },
     { provider: xai, local: false, setupHint: desktopSetupHint ?? 'Set XAI_API_KEY in .env.local.' },
@@ -49,6 +53,12 @@ export async function listProviderStatus(): Promise<ProviderStatus[]> {
     const models = await provider.listModels?.() ?? [];
     if (provider.id === 'ollama') {
       const configuredModel = process.env.OLLAMA_MODEL ?? 'llama3.1';
+      if (!models.some((model) => model.id === configuredModel)) {
+        models.unshift({ id: configuredModel, name: `${configuredModel} (configured default)` });
+      }
+    }
+    if (provider.id === 'cli') {
+      const configuredModel = process.env.OCTAVE_CLI_MODEL ?? 'cli';
       if (!models.some((model) => model.id === configuredModel)) {
         models.unshift({ id: configuredModel, name: `${configuredModel} (configured default)` });
       }

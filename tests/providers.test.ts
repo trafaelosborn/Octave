@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider } from '../src/providers/anthropic.js';
+import { CliProvider, parseShellWords } from '../src/providers/cli.js';
 import { OllamaProvider } from '../src/providers/ollama.js';
 import { OpenAIProvider, XAIProvider } from '../src/providers/openai-compatible.js';
 
@@ -63,6 +64,20 @@ describe('provider streaming', () => {
     const chunks: string[] = [];
     for await (const chunk of provider.streamChat([{ role: 'user', content: 'Hello' }])) chunks.push(chunk);
     expect(chunks.join('')).toBe('research answer');
+  });
+
+  it('streams responses from a command-line provider through stdin', async () => {
+    const provider = new CliProvider({
+      command: process.execPath,
+      args: ['-e', 'process.stdin.on("data", data => process.stdout.write("cli:" + data.toString().includes("Hello")))'],
+    });
+    const chunks: string[] = [];
+    for await (const chunk of provider.streamChat([{ role: 'user', content: 'Hello' }])) chunks.push(chunk);
+    expect(chunks.join('')).toBe('cli:true');
+  });
+
+  it('supports shell-like CLI argument parsing', () => {
+    expect(parseShellWords('exec --model "gpt test" --flag\\ value')).toEqual(['exec', '--model', 'gpt test', '--flag value']);
   });
 });
 

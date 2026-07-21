@@ -6,7 +6,9 @@ import { compileDocument } from './core/compile.js';
 import { sendChatMessage } from './core/chat-engine.js';
 import { listProjectFiles } from './core/path.js';
 import { AnthropicProvider } from './providers/anthropic.js';
+import { CliProvider } from './providers/cli.js';
 import { OllamaProvider } from './providers/ollama.js';
+import { OpenAIProvider, XAIProvider } from './providers/openai-compatible.js';
 import type { LLMProvider } from './providers/types.js';
 import { createChat, loadChat } from './storage/chat-storage.js';
 
@@ -105,7 +107,16 @@ function createProvider(name: string, model?: string): LLMProvider {
   if (name === 'anthropic') {
     return model === undefined ? new AnthropicProvider() : new AnthropicProvider({ model });
   }
-  throw new Error('Provider must be ollama or anthropic.');
+  if (name === 'openai') {
+    return model === undefined ? new OpenAIProvider() : new OpenAIProvider({ model });
+  }
+  if (name === 'xai') {
+    return model === undefined ? new XAIProvider() : new XAIProvider({ model });
+  }
+  if (name === 'cli') {
+    return model === undefined ? new CliProvider() : new CliProvider({ model });
+  }
+  throw new Error('Provider must be ollama, cli, anthropic, openai, or xai.');
 }
 
 function parseArguments(argv: string[]): ParsedArguments {
@@ -160,7 +171,7 @@ Usage:
   octave files [workspace]
   octave compile <document> [--workspace <path>] [--engine pdflatex|lualatex|tectonic]
   octave chat <message> [--workspace <path>] [--document <path>]
-                     [--pin <path>] [--provider ollama|anthropic]
+                     [--pin <path>] [--provider ollama|cli|anthropic|openai|xai]
                      [--model <name>] [--chat <id>]
 
 Examples:
