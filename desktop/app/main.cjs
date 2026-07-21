@@ -13,6 +13,10 @@ const {
   createSafeStorageEncryption,
 } = require('./provider-settings.cjs');
 const {
+  launchCliSetup,
+  resolveExecutable,
+} = require('./cli-provider-setup.cjs');
+const {
   findOpenPort,
   isSafeExternalUrl,
   isTrustedAppUrl,
@@ -200,6 +204,17 @@ function registerDesktopBridge() {
       dialog.showErrorBox('Octave could not restart', error instanceof Error ? error.message : String(error));
     }), 150);
     return settings;
+  });
+  ipcMain.handle('octave:check-cli-provider', async (event, input) => {
+    assertTrustedDesktopSender(event);
+    const command = input && typeof input === 'object' ? input.command : '';
+    const resolvedPath = await resolveExecutable(command);
+    return { installed: Boolean(resolvedPath), path: resolvedPath };
+  });
+  ipcMain.handle('octave:launch-cli-provider-setup', async (event, input) => {
+    assertTrustedDesktopSender(event);
+    await launchCliSetup(input);
+    return { launched: true };
   });
 }
 

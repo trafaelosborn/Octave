@@ -9,6 +9,55 @@ import type {
 } from '../lib/client-types';
 import { Icon } from './Icon';
 
+type CliPresetId = 'codex' | 'claude' | 'gemini' | 'custom';
+
+const CLI_PRESETS: Array<{
+  id: CliPresetId;
+  name: string;
+  command: string;
+  args: string;
+  setupArgs: string;
+  model: string;
+  detail: string;
+}> = [
+  {
+    id: 'codex',
+    name: 'Codex CLI',
+    command: 'codex',
+    args: 'exec -',
+    setupArgs: '',
+    model: 'gpt-5.6-sol',
+    detail: 'OpenAI account through the Codex CLI',
+  },
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    command: 'claude',
+    args: '-p',
+    setupArgs: '',
+    model: 'sonnet',
+    detail: 'Anthropic account through Claude Code',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini CLI',
+    command: 'gemini',
+    args: '-p {prompt}',
+    setupArgs: '',
+    model: 'gemini',
+    detail: 'Google account through Gemini CLI',
+  },
+  {
+    id: 'custom',
+    name: 'Custom CLI',
+    command: '',
+    args: '',
+    setupArgs: '',
+    model: 'cli',
+    detail: 'Any executable that prints an assistant response',
+  },
+];
+
 const PROVIDERS: Array<{ id: DesktopProviderId; name: string; detail: string }> = [
   { id: 'openai', name: 'OpenAI', detail: 'GPT and o-series models' },
   { id: 'xai', name: 'Grok (xAI)', detail: 'Grok language models' },
@@ -42,6 +91,10 @@ export function ProviderSettingsDialog({
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(settings.ollamaBaseUrl);
   const [cliCommand, setCliCommand] = useState(settings.cliCommand);
   const [cliArgs, setCliArgs] = useState(settings.cliArgs);
+  const [cliSetupArgs, setCliSetupArgs] = useState('');
+  const [cliPresetId, setCliPresetId] = useState<CliPresetId>('custom');
+  const [cliStatus, setCliStatus] = useState('');
+  const [cliStatusKind, setCliStatusKind] = useState<'idle' | 'ok' | 'warn' | 'error'>('idle');
   const [credentials, setCredentials] = useState<DesktopProviderSettingsInput['credentials']>({});
   const [problem, setProblem] = useState('');
 
@@ -52,6 +105,11 @@ export function ProviderSettingsDialog({
     setOllamaBaseUrl(settings.ollamaBaseUrl);
     setCliCommand(settings.cliCommand);
     setCliArgs(settings.cliArgs);
+    const preset = findCliPreset(settings.cliCommand, settings.cliArgs);
+    setCliPresetId(preset.id);
+    setCliSetupArgs(preset.setupArgs);
+    setCliStatus('');
+    setCliStatusKind('idle');
     setCredentials({});
     setProblem('');
   }, [open, settings]);
@@ -79,6 +137,56 @@ export function ProviderSettingsDialog({
       else next[provider] = value;
       return next;
     });
+  }
+
+  function chooseCliPreset(value: CliPresetId): void {
+    const preset = CLI_PRESETS.find((candidate) => candidate.id === value) ?? CLI_PRESETS.at(-1);
+    if (!preset) return;
+    setCliPresetId(preset.id);
+    setCliStatus('');
+    setCliStatusKind('idle');
+    setCliCommand(preset.command);
+    setCliArgs(preset.args);
+    setCliSetupArgs(preset.setupArgs);
+    updateModel('cli', preset.model);
+  }
+
+  async function checkCli(): Promise<void> {
+    if (!window.octaveDesktop) {
+      setCliStatus('Open the desktop app to check local CLI tools.');
+      setCliStatusKind('warn');
+      return;
+    }
+    setCliStatus('Checking...');
+    setCliStatusKind('idle');
+    try {
+      const result = await window.octaveDesktop.checkCliProvider({ command: cliCommand });
+      setCliStatus(result.installed
+        ? `Installed${result.path ? ` at ${result.path}` : ''}`
+        : 'Not installed or not on PATH');
+      setCliStatusKind(result.installed ? 'ok' : 'warn');
+    } catch (error) {
+      setCliStatus(error instanceof Error ? error.message : String(error));
+      setCliStatusKind('error');
+    }
+  }
+
+  async function launchCliSetup(): Promise<void> {
+    if (!window.octaveDesktop) {
+      setCliStatus('Open the desktop app to launch CLI sign-in.');
+      setCliStatusKind('warn');
+      return;
+    }
+    setCliStatus('Opening sign-in terminal...');
+    setCliStatusKind('idle');
+    try {
+      await window.octaveDesktop.launchCliProviderSetup({ command: cliCommand, args: cliSetupArgs });
+      setCliStatus('Sign-in terminal opened. Finish setup there, then save and restart Octave.');
+      setCliStatusKind('ok');
+    } catch (error) {
+      setCliStatus(error instanceof Error ? error.message : String(error));
+      setCliStatusKind('error');
+    }
   }
 
   return (
@@ -170,11 +278,25 @@ export function ProviderSettingsDialog({
 
             <section className="settings-section local-provider-settings">
               <div className="settings-section-heading"><div><h3>Command-line AI</h3><p>Use an installed CLI. Put {'{prompt}'} in args to pass the prompt as an argument; otherwise Octave writes it to stdin.</p></div></div>
+              <label className="settings-field settings-field-spaced">
+                <span>Choose CLI</span>
+                <select value={cliPresetId} onChange={(event) => chooseCliPreset(event.target.value as CliPresetId)}>
+                  {CLI_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name} - {preset.detail}</option>)}
+                </select>
+              </label>
               <div className="settings-field-grid">
                 <label className="settings-field"><span>Command</span><input value={cliCommand} placeholder="codex" onChange={(event) => setCliCommand(event.target.value)} /></label>
                 <label className="settings-field"><span>Preferred model</span><input value={models.cli} onChange={(event) => updateModel('cli', event.target.value)} /></label>
               </div>
               <label className="settings-field settings-field-spaced"><span>Arguments</span><input value={cliArgs} placeholder="exec --model gpt-5.6-sol -" onChange={(event) => setCliArgs(event.target.value)} /></label>
+              <div className="settings-field-grid settings-field-spaced">
+                <label className="settings-field"><span>Sign-in command</span><input value={cliSetupArgs} placeholder="login" onChange={(event) => setCliSetupArgs(event.target.value)} /></label>
+                <div className="cli-setup-actions">
+                  <button className="button button-secondary" type="button" onClick={() => void checkCli()} disabled={saving || !cliCommand.trim()}>Check installed</button>
+                  <button className="button button-secondary" type="button" onClick={() => void launchCliSetup()} disabled={saving || !cliCommand.trim()}>Sign in...</button>
+                </div>
+              </div>
+              {cliStatus && <p className={`cli-setup-status ${cliStatusKind}`}>{cliStatus}</p>}
             </section>
 
             {problem && <div className="settings-error" role="alert">{problem}</div>}
@@ -206,4 +328,12 @@ function credentialPlaceholder(source: DesktopProviderSettings['credentialSource
   if (source === 'saved') return 'Saved securely';
   if (source === 'environment') return 'Using environment configuration';
   return 'Paste a new key';
+}
+
+function findCliPreset(command: string, args: string): typeof CLI_PRESETS[number] {
+  const customPreset = CLI_PRESETS.find((preset) => preset.id === 'custom');
+  if (!customPreset) throw new Error('Custom CLI preset is missing.');
+  return CLI_PRESETS.find((preset) => preset.command === command && preset.args === args)
+    ?? CLI_PRESETS.find((preset) => preset.command === command)
+    ?? customPreset;
 }
