@@ -78,7 +78,7 @@ Octave discovers providers at startup:
 
 - **Offline demo:** always available; useful for exploring the workflow without model access.
 - **Ollama:** available when an Ollama server responds at `OLLAMA_BASE_URL`, defaulting to `http://127.0.0.1:11434`.
-- **Command-line AI:** available when `OCTAVE_CLI_COMMAND` names an installed executable. The desktop setup can pick common CLIs, check whether the command is installed, and open that tool's sign-in flow in a terminal. Octave passes the assembled research prompt to stdin unless `OCTAVE_CLI_ARGS` contains `{prompt}`.
+- **Command-line AI:** available when `OCTAVE_CLI_COMMAND` names an installed executable. The desktop setup shows common CLI connectors, detects whether they are installed, opens that tool's sign-in flow in a terminal, and keeps command/path details tucked under advanced settings. Octave passes the assembled research prompt to stdin unless `OCTAVE_CLI_ARGS` contains `{prompt}`.
 - **Anthropic:** available when `ANTHROPIC_API_KEY` is set.
 - **OpenAI:** available when `OPENAI_API_KEY` is set.
 - **xAI / Grok:** available when `XAI_API_KEY` is set.
