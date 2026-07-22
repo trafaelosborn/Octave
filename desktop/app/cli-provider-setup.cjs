@@ -36,11 +36,7 @@ async function launchCliSetup({ command, args }) {
 
   if (process.platform === 'win32') {
     const commandLine = [executable, ...parsedArgs].map(quotePowerShellArgument).join(' ');
-    spawn('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `& ${commandLine}`], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    }).unref();
+    openWindowsTerminal(['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `& ${commandLine}`]);
     return;
   }
 
@@ -58,11 +54,7 @@ async function launchCliInstall({ preset }) {
   if (!installCommand) throw new Error('Choose a supported CLI installer.');
 
   if (process.platform === 'win32') {
-    spawn('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', installCommand], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    }).unref();
+    openWindowsTerminal(['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', installCommand]);
     return;
   }
 
@@ -122,6 +114,14 @@ function normalizeCommand(command) {
 
 function quotePowerShellArgument(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function openWindowsTerminal(powershellArgs) {
+  spawn('cmd.exe', ['/d', '/s', '/c', 'start', 'Octave CLI setup', 'powershell.exe', ...powershellArgs], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  }).unref();
 }
 
 function hasExtension(command, extensions) {
