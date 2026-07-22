@@ -2,6 +2,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+const INSTALL_COMMANDS = Object.freeze({
+  claude: 'irm https://claude.ai/install.ps1 | iex',
+  codex: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+  gemini: 'npm install -g @google/gemini-cli',
+});
+
 async function resolveExecutable(command, environment = process.env) {
   const normalized = normalizeCommand(command);
   if (!normalized) return null;
@@ -45,6 +51,29 @@ async function launchCliSetup({ command, args }) {
   const terminal = await resolveFirstExecutable(['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'xterm']);
   if (!terminal) throw new Error('No supported terminal emulator was found.');
   spawn(terminal, ['-e', executable, ...parsedArgs], { detached: true, stdio: 'ignore' }).unref();
+}
+
+async function launchCliInstall({ preset }) {
+  const installCommand = INSTALL_COMMANDS[preset];
+  if (!installCommand) throw new Error('Choose a supported CLI installer.');
+
+  if (process.platform === 'win32') {
+    spawn('powershell.exe', ['-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', installCommand], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    }).unref();
+    return;
+  }
+
+  if (process.platform === 'darwin') {
+    spawn('open', ['-a', 'Terminal', 'sh', '-lc', installCommand], { detached: true, stdio: 'ignore' }).unref();
+    return;
+  }
+
+  const terminal = await resolveFirstExecutable(['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'xterm']);
+  if (!terminal) throw new Error('No supported terminal emulator was found.');
+  spawn(terminal, ['-e', 'sh', '-lc', installCommand], { detached: true, stdio: 'ignore' }).unref();
 }
 
 function parseShellWords(input) {
@@ -117,6 +146,8 @@ async function isFile(filePath) {
 }
 
 module.exports = {
+  INSTALL_COMMANDS,
+  launchCliInstall,
   launchCliSetup,
   parseShellWords,
   resolveExecutable,

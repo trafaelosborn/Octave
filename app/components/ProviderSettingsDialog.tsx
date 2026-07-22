@@ -333,6 +333,30 @@ export function ProviderSettingsDialog({
     }
   }
 
+  async function installCli(): Promise<void> {
+    if (!window.octaveDesktop) {
+      setCliStatus('Open the desktop app to install CLI tools.');
+      setCliStatusKind('warn');
+      return;
+    }
+    if (!['codex', 'claude', 'gemini'].includes(cliPresetId)) {
+      setCliStatus('Choose a supported CLI preset before installing.');
+      setCliStatusKind('warn');
+      return;
+    }
+    const preset = CLI_PRESETS.find((candidate) => candidate.id === cliPresetId);
+    setCliStatus('Opening installer terminal...');
+    setCliStatusKind('idle');
+    try {
+      await window.octaveDesktop.installCliProvider({ preset: cliPresetId as 'codex' | 'claude' | 'gemini' });
+      setCliStatus(`${preset?.name ?? 'CLI'} installer opened. Finish the install there, restart Octave if PATH changed, then Check installed.`);
+      setCliStatusKind('ok');
+    } catch (error) {
+      setCliStatus(error instanceof Error ? error.message : String(error));
+      setCliStatusKind('error');
+    }
+  }
+
   return (
     <div className="settings-scrim" role="presentation">
       <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="provider-settings-title">
@@ -460,7 +484,10 @@ export function ProviderSettingsDialog({
                         <p className="cli-install-help">
                           <span>{missingCliMessage(preset)}</span>
                           {preset.installCommand && <code>{preset.installCommand}</code>}
-                          {preset.installUrl && <a href={preset.installUrl} target="_blank" rel="noreferrer">Open install docs</a>}
+                          <span className="cli-install-actions">
+                            <button className="text-button" type="button" onClick={() => void installCli()} disabled={saving}>Open installer</button>
+                            {preset.installUrl && <a href={preset.installUrl} target="_blank" rel="noreferrer">Open install docs</a>}
+                          </span>
                         </p>
                       )}
                     </>

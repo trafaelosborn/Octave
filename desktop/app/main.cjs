@@ -13,6 +13,7 @@ const {
   createSafeStorageEncryption,
 } = require('./provider-settings.cjs');
 const {
+  launchCliInstall,
   launchCliSetup,
   resolveExecutable,
 } = require('./cli-provider-setup.cjs');
@@ -214,6 +215,11 @@ function registerDesktopBridge() {
   ipcMain.handle('octave:launch-cli-provider-setup', async (event, input) => {
     assertTrustedDesktopSender(event);
     await launchCliSetup(input);
+    return { launched: true };
+  });
+  ipcMain.handle('octave:install-cli-provider', async (event, input) => {
+    assertTrustedDesktopSender(event);
+    await launchCliInstall(input);
     return { launched: true };
   });
 }

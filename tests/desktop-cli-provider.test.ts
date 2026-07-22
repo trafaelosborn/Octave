@@ -5,7 +5,8 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
+const { INSTALL_COMMANDS, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
+  INSTALL_COMMANDS: Record<string, string>;
   parseShellWords: (input: string) => string[];
   resolveExecutable: (command: string, environment?: Record<string, string | undefined>) => Promise<string | null>;
 };
@@ -35,5 +36,10 @@ describe('desktop CLI provider setup', () => {
 
   it('parses setup arguments without invoking a shell parser', () => {
     expect(parseShellWords('login --model "gpt test" --flag\\ value')).toEqual(['login', '--model', 'gpt test', '--flag value']);
+  });
+
+  it('keeps CLI installer commands on an explicit allowlist', () => {
+    expect(INSTALL_COMMANDS.claude).toBe('irm https://claude.ai/install.ps1 | iex');
+    expect(Object.keys(INSTALL_COMMANDS).sort()).toEqual(['claude', 'codex', 'gemini']);
   });
 });
