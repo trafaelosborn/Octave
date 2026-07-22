@@ -21,6 +21,15 @@ class RecordingProvider implements LLMProvider {
   }
 }
 
+class FailingProvider implements LLMProvider {
+  readonly id = 'failing';
+  readonly name = 'Failing provider';
+
+  async *streamChat(): AsyncIterable<string> {
+    throw new Error('model may not exist or you may not have access');
+  }
+}
+
 describe('chat engine', () => {
   let workspaceRoot: string;
 
@@ -159,6 +168,19 @@ describe('chat engine', () => {
     })).rejects.toThrow(`at most ${MAX_CHAT_ATTACHMENTS}`);
     await expect(sendChatMessage({ ...base, attachmentPaths: ['../outside.md'] }))
       .rejects.toThrow('escapes the workspace');
+    expect((await loadChat(workspaceRoot, chat.id))?.messages).toEqual([]);
+  });
+
+  it('rolls back the user message when a provider fails before streaming content', async () => {
+    const chat = await createChat(workspaceRoot, { scope: 'workspace' });
+
+    await expect(sendChatMessage({
+      workspaceRoot,
+      chatId: chat.id,
+      userMessage: 'Try the unavailable model.',
+      provider: new FailingProvider(),
+    })).rejects.toThrow('model may not exist');
+
     expect((await loadChat(workspaceRoot, chat.id))?.messages).toEqual([]);
   });
 

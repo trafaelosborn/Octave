@@ -137,10 +137,25 @@ export async function deleteChat(workspaceRoot: string, chatId: string): Promise
   }
 }
 
+export async function renameChat(workspaceRoot: string, chatId: string, title: string): Promise<ChatSession> {
+  const session = await loadChat(workspaceRoot, chatId);
+  if (!session) throw new Error(`Chat session not found: ${chatId}`);
+  session.title = normalizeChatTitle(title);
+  session.updatedAt = new Date().toISOString();
+  await saveChat(workspaceRoot, session);
+  return session;
+}
+
 async function chatFilePath(workspaceRoot: string, chatId: string): Promise<string> {
   assertValidChatId(chatId);
   const directory = await ensureChatDirectory(workspaceRoot);
   return path.join(directory, `${chatId}.json`);
+}
+
+function normalizeChatTitle(title: string): string {
+  const normalized = title.trim().replace(/\s+/g, ' ');
+  if (!normalized) throw new Error('Chat title cannot be empty.');
+  return normalized.length > 70 ? `${normalized.slice(0, 67)}...` : normalized;
 }
 
 async function readSession(filePath: string): Promise<ChatSession> {

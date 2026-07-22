@@ -98,6 +98,8 @@ export async function sendChatMessage(
   } catch (error) {
     if (assistantContent.trim()) {
       await appendMessage(options.workspaceRoot, options.chatId, 'assistant', assistantContent, undefined, attribution);
+    } else {
+      await removePersistedUserMessage(options.workspaceRoot, options.chatId, savedUserMessage);
     }
     throw error;
   }
@@ -120,6 +122,24 @@ export async function sendChatMessage(
     assistantMessage,
     updatedSession: session,
   };
+}
+
+async function removePersistedUserMessage(
+  workspaceRoot: string,
+  chatId: string,
+  userMessage: ChatMessage,
+): Promise<void> {
+  const session = await loadChat(workspaceRoot, chatId);
+  const lastMessage = session?.messages.at(-1);
+  if (!session || (lastMessage !== undefined && (
+    lastMessage.ts !== userMessage.ts ||
+    lastMessage.role !== userMessage.role ||
+    lastMessage.content !== userMessage.content
+  ))) return;
+  session.messages.pop();
+  session.updatedAt = new Date().toISOString();
+  if (session.messages.length === 0) session.title = 'New chat';
+  await saveChat(workspaceRoot, session);
 }
 
 async function extractAttachments(workspaceRoot: string, attachmentPaths: string[]): Promise<ChatAttachment[]> {

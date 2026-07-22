@@ -68,7 +68,7 @@ export async function POST(request: Request): Promise<Response> {
           controller.close();
         }).catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
-          controller.enqueue(encoder.encode(`\n\n[Octave error: ${message}]`));
+          controller.enqueue(encoder.encode(`\n\n[${isModelAvailabilityError(message) ? 'Octave model error' : 'Octave error'}: ${message}]`));
           controller.close();
         });
       },
@@ -85,4 +85,22 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     return jsonError(error);
   }
+}
+
+function isModelAvailabilityError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('selected model') ||
+    normalized.includes('model not') ||
+    normalized.includes('model does not') ||
+    normalized.includes('model doesn') ||
+    normalized.includes('unknown model') ||
+    normalized.includes('invalid model') ||
+    normalized.includes('unsupported model') ||
+    normalized.includes('no access') ||
+    normalized.includes('not have access') ||
+    normalized.includes('may not exist') ||
+    normalized.includes('run --model') ||
+    normalized.includes('model unavailable')
+  );
 }

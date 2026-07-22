@@ -22,10 +22,13 @@ export function ChatPanel({
   documentPath,
   providerId,
   modelId,
+  modelRecovery,
   providers,
   onInput,
   onProvider,
   onModel,
+  onRetryModelError,
+  onDismissModelError,
   onScope,
   onToggleAttachment,
   onRemoveAttachment,
@@ -48,10 +51,18 @@ export function ChatPanel({
   documentPath: string;
   providerId: string;
   modelId: string;
+  modelRecovery: {
+    message: string;
+    prompt: string;
+    providerId: string;
+    failedModel: string;
+  } | null;
   providers: ProviderStatus[];
   onInput: (value: string) => void;
   onProvider: (providerId: string) => void;
   onModel: (modelId: string) => void;
+  onRetryModelError: () => void;
+  onDismissModelError: () => void;
   onScope: (scope: ChatScope) => void;
   onToggleAttachment: (path: string) => void;
   onRemoveAttachment: (path: string) => void;
@@ -168,6 +179,19 @@ export function ChatPanel({
       </div>
 
       <div className="composer-shell">
+        {modelRecovery && (
+          <div className="model-recovery" role="status">
+            <div>
+              <strong>Model unavailable</strong>
+              <span>{modelRecovery.failedModel || 'Selected model'} failed for {modelRecovery.providerId}. Pick another model above, then retry.</span>
+              <small>{modelRecovery.message}</small>
+            </div>
+            <div>
+              <button type="button" className="button button-secondary" onClick={onDismissModelError}>Dismiss</button>
+              <button type="button" className="button button-primary" onClick={onRetryModelError}>Retry with selected model</button>
+            </div>
+          </div>
+        )}
         {attachmentPickerOpen && (
           <div className="attachment-picker">
             <header>

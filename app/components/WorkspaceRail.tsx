@@ -62,6 +62,8 @@ export function WorkspaceRail({
   onOpenSearchResult,
   onNewChat,
   onOpenChat,
+  onRenameChat,
+  onDeleteChat,
   onOpenReview,
   onOutlineItem,
   onRefreshCitations,
@@ -111,6 +113,8 @@ export function WorkspaceRail({
   onOpenSearchResult: (result: SearchResult) => void;
   onNewChat: () => void;
   onOpenChat: (chatId: string) => void;
+  onRenameChat: (chat: ChatSessionMeta) => void;
+  onDeleteChat: (chat: ChatSessionMeta) => void;
   onOpenReview: (reviewId: string) => void;
   onOutlineItem: (item: OutlineItem) => void;
   onRefreshCitations: () => void;
@@ -228,10 +232,16 @@ export function WorkspaceRail({
               <button className="button button-secondary full-width" onClick={onNewChat}>+ New research chat</button>
               <div className="chat-list">
                 {chats.map((chat) => (
-                  <button key={chat.id} className={activeChatId === chat.id ? 'selected' : ''} onClick={() => onOpenChat(chat.id)}>
+                  <div key={chat.id} className={`chat-row ${activeChatId === chat.id ? 'selected' : ''}`}>
+                    <button className="chat-open" onClick={() => onOpenChat(chat.id)}>
                     <span>{chat.title}</span>
                     <small>{chat.scope === 'document' ? chat.documentPath : 'Project conversation'} · {timeAgo(chat.updatedAt)}</small>
-                  </button>
+                    </button>
+                    <div className="chat-row-actions">
+                      <button type="button" onClick={() => onRenameChat(chat)} aria-label={`Rename ${chat.title}`}>Rename</button>
+                      <button type="button" onClick={() => onDeleteChat(chat)} aria-label={`Delete ${chat.title}`}>Delete</button>
+                    </div>
+                  </div>
                 ))}
                 {chats.length === 0 && <RailEmpty text="Conversations remain inside this workspace." />}
               </div>

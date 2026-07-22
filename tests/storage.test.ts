@@ -8,6 +8,7 @@ import {
   deleteChat,
   listChats,
   loadChat,
+  renameChat,
 } from '../src/storage/chat-storage.js';
 
 describe('workspace chat storage', () => {
@@ -30,6 +31,16 @@ describe('workspace chat storage', () => {
     expect(await listChats(workspaceRoot)).toMatchObject([{ id: chat.id, title: 'Check the proof' }]);
     expect(await deleteChat(workspaceRoot, chat.id)).toBe(true);
     expect(await deleteChat(workspaceRoot, chat.id)).toBe(false);
+  });
+
+  it('renames chats with normalized bounded titles', async () => {
+    const chat = await createChat(workspaceRoot);
+    const renamed = await renameChat(workspaceRoot, chat.id, `  ${'important '.repeat(12)}  `);
+
+    expect(renamed.title).toHaveLength(70);
+    expect(renamed.title.endsWith('...')).toBe(true);
+    expect(await listChats(workspaceRoot)).toMatchObject([{ id: chat.id, title: renamed.title }]);
+    await expect(renameChat(workspaceRoot, chat.id, '   ')).rejects.toThrow('Chat title');
   });
 
   it('rejects path-like chat IDs', async () => {

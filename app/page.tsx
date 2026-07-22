@@ -43,6 +43,15 @@ const REVIEW_PROMPT = [
   'Call out missing assumptions, unsupported claims, citation gaps, and the highest-leverage revisions.',
 ].join(' ');
 
+interface ModelRecoveryState {
+  message: string;
+  prompt: string;
+  providerId: string;
+  failedModel: string;
+  attachmentPaths: string[];
+  includeCitationEvidence: boolean;
+}
+
 export default function OctavePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('');
@@ -104,6 +113,7 @@ export default function OctavePage() {
   const [submissionPreflight, setSubmissionPreflight] = useState<SubmissionPreflight | null>(null);
   const [submissionPackages, setSubmissionPackages] = useState<SubmissionPackage[]>([]);
   const [submissionBusy, setSubmissionBusy] = useState<'loading' | 'saving' | 'preflight' | 'package' | null>(null);
+  const [modelRecovery, setModelRecovery] = useState<ModelRecoveryState | null>(null);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
@@ -489,6 +499,41 @@ export default function OctavePage() {
     setChats(data.chats);
   }
 
+  async function renameChatSession(chat: ChatSessionMeta): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const title = window.prompt('Rename chat', chat.title)?.trim();
+    if (!title || title === chat.title) return;
+    const data = await apiJson<{ chat: ChatSession }>(`/api/chats`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: activeWorkspaceId, chatId: chat.id, title }),
+    });
+    setChats((current) => current.map((item) => item.id === chat.id ? {
+      ...item,
+      title: data.chat.title,
+      updatedAt: data.chat.updatedAt,
+    } : item).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    if (activeChatId === chat.id) await loadChat(chat.id, activeWorkspaceId, false);
+    setError('');
+  }
+
+  async function deleteChatSession(chat: ChatSessionMeta): Promise<void> {
+    if (!activeWorkspaceId) return;
+    if (!window.confirm(`Delete the chat "${chat.title}"? This removes it from this workspace.`)) return;
+    await apiJson<{ deleted: boolean }>(`/api/chats?workspaceId=${encodeURIComponent(activeWorkspaceId)}&chatId=${encodeURIComponent(chat.id)}`, { method: 'DELETE' });
+    if (activeChatId === chat.id) {
+      setActiveChatId('');
+      setMessages([]);
+      setAttachmentPaths([]);
+      setChatInput('');
+      setModelRecovery(null);
+      window.localStorage.removeItem(`octave:chat:${activeWorkspaceId}`);
+      setWorkView('editor');
+    }
+    await refreshChats();
+    setError('');
+  }
+
   async function refreshReviews(): Promise<void> {
     if (!activeWorkspaceId) return;
     const data = await apiJson<{ reviews: ReviewMemoMeta[] }>(`/api/reviews?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
@@ -552,23 +597,30 @@ export default function OctavePage() {
     setChatDocumentPath(data.chat.documentPath ?? '');
     setMessages(data.chat.messages);
     setAttachmentPaths([]);
+    setModelRecovery(null);
     window.localStorage.setItem(`octave:chat:${workspaceId}`, chatId);
     if (show) setWorkView('chat');
   }
 
-  async function sendChat(promptOverride?: string, includeCitationEvidence = false): Promise<void> {
+  async function sendChat(
+    promptOverride?: string,
+    includeCitationEvidence = false,
+    attachmentPathOverride?: string[],
+  ): Promise<void> {
     const prompt = (promptOverride ?? chatInput).trim();
     if (!prompt || chatLoading || !activeWorkspaceId) return;
 
+    const effectiveAttachmentPaths = attachmentPathOverride ?? attachmentPaths;
     const newChatDocumentPath = chatScope === 'document' ? selectedPath : '';
     const chatId = activeChatId || await createNewChat();
     const scopedDocumentPath = activeChatId ? chatDocumentPath : newChatDocumentPath;
     const now = new Date().toISOString();
     const priorMessages = messages;
-    const pendingAttachments = attachmentPaths
+    const pendingAttachments = effectiveAttachmentPaths
       .map((attachmentPath) => files.find((file) => file.path === attachmentPath))
       .filter((file): file is OctaveFile => Boolean(file))
       .map(toOptimisticAttachment);
+    const retryAttachmentPaths = [...effectiveAttachmentPaths];
     const optimisticUser: ChatMessage = {
       ts: now,
       role: 'user',
@@ -583,6 +635,7 @@ export default function OctavePage() {
     setMessages(optimistic);
     setChatInput('');
     setAttachmentPaths([]);
+    setModelRecovery(null);
     setChatLoading(true);
     setWorkView('chat');
     const abort = new AbortController();
@@ -600,7 +653,7 @@ export default function OctavePage() {
           documentPath: chatScope === 'document' ? (scopedDocumentPath || undefined) : undefined,
           provider: providerId,
           model: modelId || undefined,
-          attachmentPaths: attachmentPaths.length > 0 ? attachmentPaths : undefined,
+          attachmentPaths: effectiveAttachmentPaths.length > 0 ? effectiveAttachmentPaths : undefined,
           includeCitationEvidence,
         }),
       });
@@ -620,6 +673,23 @@ export default function OctavePage() {
         setMessages([...priorMessages, optimisticUser, { ts: now, role: 'assistant', content: assistantContent }]);
       }
       assistantContent += decoder.decode();
+      const modelError = parseModelError(assistantContent);
+      if (modelError) {
+        setMessages([...priorMessages, optimisticUser, { ts: now, role: 'assistant', content: modelError.assistantContent }]);
+        setChatInput(prompt);
+        setAttachmentPaths(retryAttachmentPaths);
+        setModelRecovery({
+          message: modelError.message,
+          prompt,
+          providerId,
+          failedModel: modelId,
+          attachmentPaths: retryAttachmentPaths,
+          includeCitationEvidence,
+        });
+        setError('');
+        await refreshChats();
+        return;
+      }
       await loadChat(chatId);
       await refreshChats();
       setError('');
@@ -630,6 +700,15 @@ export default function OctavePage() {
       if (chatAbortRef.current === abort) chatAbortRef.current = null;
       setChatLoading(false);
     }
+  }
+
+  async function retryAfterModelError(): Promise<void> {
+    if (!modelRecovery) return;
+    const recovery = modelRecovery;
+    setChatInput(recovery.prompt);
+    setAttachmentPaths(recovery.attachmentPaths);
+    setModelRecovery(null);
+    await sendChat(recovery.prompt, recovery.includeCitationEvidence, recovery.attachmentPaths);
   }
 
   function stopChat(): void {
@@ -720,6 +799,7 @@ export default function OctavePage() {
     const provider = providers.find((candidate) => candidate.id === nextProviderId);
     const nextModel = window.localStorage.getItem(`octave:model:${nextProviderId}`) ?? provider?.models[0]?.id ?? '';
     setModelId(nextModel);
+    setModelRecovery(null);
   }
 
   function setModel(nextModelId: string): void {
@@ -761,6 +841,22 @@ export default function OctavePage() {
   }
 
   const guard = (operation: () => Promise<void>) => () => operation().catch(showError);
+
+  function parseModelError(content: string): { message: string; assistantContent: string } | null {
+    const match = content.match(/\[Octave model error:\s*([\s\S]*?)\]\s*$/);
+    if (!match) return null;
+    const message = match[1]?.trim() || 'The selected model is unavailable.';
+    return {
+      message,
+      assistantContent: [
+        'The selected model is unavailable for this provider/account.',
+        '',
+        'Choose another model from the dropdown and retry the prompt.',
+        '',
+        `Technical detail: ${message}`,
+      ].join('\n'),
+    };
+  }
 
   if (booting) {
     return <div className="boot-screen"><div className="brand-mark large">O</div><p>Opening the research workspace...</p></div>;
@@ -810,6 +906,8 @@ export default function OctavePage() {
         onOpenSearchResult={(result) => loadDocument(result.path, activeWorkspaceId, result.line).catch(showError)}
         onNewChat={() => createNewChat().catch(showError)}
         onOpenChat={(chatId) => loadChat(chatId).catch(showError)}
+        onRenameChat={(chat) => renameChatSession(chat).catch(showError)}
+        onDeleteChat={(chat) => deleteChatSession(chat).catch(showError)}
         onOpenReview={(reviewId) => loadReviewMemo(reviewId).catch(showError)}
         onOutlineItem={openOutlineItem}
         onRefreshCitations={guard(refreshCitations)}
@@ -925,10 +1023,13 @@ export default function OctavePage() {
                     documentPath={chatDocumentPath || selectedPath}
                     providerId={providerId}
                     modelId={modelId}
+                    modelRecovery={modelRecovery}
                     providers={providers}
                     onInput={setChatInput}
                     onProvider={setProvider}
                     onModel={setModel}
+                    onRetryModelError={() => retryAfterModelError().catch(showError)}
+                    onDismissModelError={() => setModelRecovery(null)}
                     onScope={changeChatScope}
                     onToggleAttachment={toggleAttachment}
                     onRemoveAttachment={(attachmentPath) => setAttachmentPaths((current) => current.filter((path) => path !== attachmentPath))}
