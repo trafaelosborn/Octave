@@ -6,7 +6,7 @@ const PROVIDERS = ['demo', 'ollama', 'cli', ...CLOUD_PROVIDERS];
 const DEFAULT_MODELS = Object.freeze({
   demo: 'demo',
   ollama: 'llama3.1',
-  cli: 'cli',
+  cli: 'gpt-5.6-sol',
   anthropic: 'claude-sonnet-4-20250514',
   openai: 'gpt-5.6-sol',
   xai: 'grok-4.5-latest',

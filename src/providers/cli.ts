@@ -23,7 +23,7 @@ export class CliProvider implements LLMProvider {
     this.name = options.name ?? 'Command-line AI';
     this.command = options.command ?? process.env.OCTAVE_CLI_COMMAND ?? '';
     this.args = options.args ?? parseShellWords(process.env.OCTAVE_CLI_ARGS ?? '');
-    this.defaultModel = options.model ?? process.env.OCTAVE_CLI_MODEL ?? 'cli';
+    this.defaultModel = options.model ?? process.env.OCTAVE_CLI_MODEL ?? 'gpt-5.6-sol';
   }
 
   async isAvailable(): Promise<boolean> {

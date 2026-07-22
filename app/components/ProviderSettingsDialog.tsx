@@ -12,6 +12,19 @@ import { Icon } from './Icon';
 type CliPresetId = 'codex' | 'claude' | 'gemini' | 'custom';
 type CliStatusKind = 'idle' | 'ok' | 'warn' | 'error';
 type CliInstallStatus = Record<CliPresetId, { checked: boolean; installed: boolean; path: string | null }>;
+type PlatformId = 'openai' | 'anthropic' | 'xai' | 'gemini' | 'ollama' | 'demo';
+type ConnectionMode = 'api' | 'cli' | 'local' | 'demo';
+
+interface PlatformOption {
+  id: PlatformId;
+  name: string;
+  detail: string;
+  apiProvider?: DesktopCloudProviderId;
+  cliPreset?: Exclude<CliPresetId, 'custom'>;
+  localProvider?: Extract<DesktopProviderId, 'ollama'>;
+  demoProvider?: Extract<DesktopProviderId, 'demo'>;
+  frontierModel: string;
+}
 
 const CLI_PRESETS: Array<{
   id: CliPresetId;
@@ -39,7 +52,7 @@ const CLI_PRESETS: Array<{
     command: 'claude',
     args: '-p',
     setupArgs: '',
-    model: 'sonnet',
+    model: 'claude-sonnet-4-20250514',
     detail: 'Anthropic account through Claude Code',
     account: 'Anthropic',
   },
@@ -49,7 +62,7 @@ const CLI_PRESETS: Array<{
     command: 'gemini',
     args: '-p {prompt}',
     setupArgs: '',
-    model: 'gemini',
+    model: 'gemini-2.5-pro',
     detail: 'Google account through Gemini CLI',
     account: 'Google',
   },
@@ -72,19 +85,57 @@ const CLI_INSTALL_EMPTY: CliInstallStatus = {
   custom: { checked: false, installed: false, path: null },
 };
 
-const PROVIDERS: Array<{ id: DesktopProviderId; name: string; detail: string }> = [
-  { id: 'openai', name: 'OpenAI', detail: 'GPT and o-series models' },
-  { id: 'xai', name: 'Grok (xAI)', detail: 'Grok language models' },
-  { id: 'anthropic', name: 'Claude (Anthropic)', detail: 'Claude language models' },
-  { id: 'cli', name: 'Command-line AI', detail: 'Use an installed AI CLI through stdin or arguments' },
-  { id: 'ollama', name: 'Ollama', detail: 'Models running on this computer or your network' },
-  { id: 'demo', name: 'Offline demo', detail: 'Explore Octave without an AI account' },
-];
-
 const CLOUD_PROVIDERS: Array<{ id: DesktopCloudProviderId; name: string; keyLabel: string }> = [
   { id: 'openai', name: 'OpenAI', keyLabel: 'OpenAI API key' },
   { id: 'xai', name: 'Grok (xAI)', keyLabel: 'xAI API key' },
   { id: 'anthropic', name: 'Claude (Anthropic)', keyLabel: 'Anthropic API key' },
+];
+
+const PLATFORMS: PlatformOption[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    detail: 'GPT frontier models through API keys or the Codex CLI.',
+    apiProvider: 'openai',
+    cliPreset: 'codex',
+    frontierModel: 'gpt-5.6-sol',
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    detail: 'Claude frontier models through API keys or Claude Code.',
+    apiProvider: 'anthropic',
+    cliPreset: 'claude',
+    frontierModel: 'claude-sonnet-4-20250514',
+  },
+  {
+    id: 'xai',
+    name: 'Grok',
+    detail: 'xAI/Grok frontier models through an API key.',
+    apiProvider: 'xai',
+    frontierModel: 'grok-4.5-latest',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini',
+    detail: 'Google Gemini through the installed Gemini CLI.',
+    cliPreset: 'gemini',
+    frontierModel: 'gemini-2.5-pro',
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    detail: 'Local models running on this computer or your network.',
+    localProvider: 'ollama',
+    frontierModel: 'llama3.1',
+  },
+  {
+    id: 'demo',
+    name: 'Offline demo',
+    detail: 'Explore Octave without signing in.',
+    demoProvider: 'demo',
+    frontierModel: 'demo',
+  },
 ];
 
 export function ProviderSettingsDialog({
@@ -111,8 +162,14 @@ export function ProviderSettingsDialog({
   const [cliStatus, setCliStatus] = useState('');
   const [cliStatusKind, setCliStatusKind] = useState<CliStatusKind>('idle');
   const [cliAdvancedOpen, setCliAdvancedOpen] = useState(false);
+  const [platformId, setPlatformId] = useState<PlatformId>('openai');
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('api');
   const [credentials, setCredentials] = useState<DesktopProviderSettingsInput['credentials']>({});
   const [problem, setProblem] = useState('');
+  const activePlatform = findPlatform(platformId);
+  const activeCloudProvider = activePlatform.apiProvider
+    ? CLOUD_PROVIDERS.find((provider) => provider.id === activePlatform.apiProvider)
+    : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -124,6 +181,9 @@ export function ProviderSettingsDialog({
     const preset = findCliPreset(settings.cliCommand, settings.cliArgs);
     setCliPresetId(preset.id);
     setCliSetupArgs(preset.setupArgs);
+    const selection = inferPlatformSelection(settings.defaultProvider, preset.id);
+    setPlatformId(selection.platform.id);
+    setConnectionMode(selection.mode);
     setCliInstallStatus(CLI_INSTALL_EMPTY);
     setCliStatus('');
     setCliStatusKind('idle');
@@ -158,18 +218,47 @@ export function ProviderSettingsDialog({
     });
   }
 
-  function chooseCliPreset(value: CliPresetId): void {
-    const preset = CLI_PRESETS.find((candidate) => candidate.id === value) ?? CLI_PRESETS.at(-1);
-    if (!preset) return;
-    setCliPresetId(preset.id);
+  function choosePlatform(value: PlatformId): void {
+    const platform = findPlatform(value);
+    const nextMode = defaultConnectionMode(platform, connectionMode);
+    setPlatformId(platform.id);
+    applyPlatformConnection(platform, nextMode);
+  }
+
+  function chooseConnectionMode(mode: ConnectionMode): void {
+    applyPlatformConnection(findPlatform(platformId), mode);
+  }
+
+  function applyPlatformConnection(platform: PlatformOption, mode: ConnectionMode): void {
+    setConnectionMode(mode);
     setCliStatus('');
     setCliStatusKind('idle');
-    setCliCommand(preset.command);
-    setCliArgs(preset.args);
-    setCliSetupArgs(preset.setupArgs);
-    setDefaultProvider('cli');
-    setCliAdvancedOpen(preset.id === 'custom');
-    updateModel('cli', preset.model);
+
+    if (mode === 'api' && platform.apiProvider) {
+      setDefaultProvider(platform.apiProvider);
+      updateModel(platform.apiProvider, platform.frontierModel);
+      return;
+    }
+    if (mode === 'cli' && platform.cliPreset) {
+      const preset = findCliPresetById(platform.cliPreset);
+      setDefaultProvider('cli');
+      setCliPresetId(preset.id);
+      setCliCommand(preset.command);
+      setCliArgs(preset.args);
+      setCliSetupArgs(preset.setupArgs);
+      updateModel('cli', platform.frontierModel);
+      setCliAdvancedOpen(false);
+      return;
+    }
+    if (mode === 'local' && platform.localProvider) {
+      setDefaultProvider(platform.localProvider);
+      updateModel(platform.localProvider, platform.frontierModel);
+      return;
+    }
+    if (mode === 'demo' && platform.demoProvider) {
+      setDefaultProvider(platform.demoProvider);
+      updateModel(platform.demoProvider, platform.frontierModel);
+    }
   }
 
   async function detectCliTools(): Promise<void> {
@@ -253,25 +342,47 @@ export function ProviderSettingsDialog({
         <form onSubmit={(event) => void submit(event)}>
           <div className="settings-scroll">
             <section className="settings-section">
-              <label className="settings-field">
-                <span>Default provider</span>
-                <select value={defaultProvider} onChange={(event) => setDefaultProvider(event.target.value as DesktopProviderId)}>
-                  {PROVIDERS.map((provider) => (
-                    <option key={provider.id} value={provider.id}>{provider.name} - {provider.detail}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="settings-section-heading"><div><h3>Choose platform</h3><p>Select the AI account or local runtime Octave should use by default.</p></div></div>
+              <div className="platform-grid">
+                {PLATFORMS.map((platform) => (
+                  <button
+                    aria-pressed={platform.id === platformId}
+                    className={`platform-card ${platform.id === platformId ? 'selected' : ''}`}
+                    key={platform.id}
+                    type="button"
+                    onClick={() => choosePlatform(platform.id)}
+                  >
+                    <strong>{platform.name}</strong>
+                    <small>{platform.detail}</small>
+                    <em>{platform.frontierModel}</em>
+                  </button>
+                ))}
+              </div>
+              <div className="connection-mode-row">
+                {connectionModesFor(findPlatform(platformId)).map((mode) => (
+                  <button
+                    aria-pressed={mode === connectionMode}
+                    className={mode === connectionMode ? 'selected' : ''}
+                    key={mode}
+                    type="button"
+                    onClick={() => chooseConnectionMode(mode)}
+                  >
+                    {connectionModeLabel(mode)}
+                  </button>
+                ))}
+              </div>
             </section>
 
+            {connectionMode === 'api' && (
             <section className="settings-section">
               <div className="settings-section-heading">
-                <div><h3>Cloud providers</h3><p>Paste a key only when adding or replacing it. Saved keys are never returned to this interface.</p></div>
+                <div><h3>{activeCloudProvider?.name ?? activePlatform.name} API</h3><p>Paste a key only when adding or replacing it. Saved keys are never returned to this interface.</p></div>
                 <span className={`secure-storage-status ${settings.encryptionAvailable ? 'available' : ''}`}>
                   {settings.encryptionAvailable ? 'OS encryption ready' : 'Encryption unavailable'}
                 </span>
               </div>
               <div className="provider-settings-list">
-                {CLOUD_PROVIDERS.map((provider) => {
+                {(activeCloudProvider ? [activeCloudProvider] : []).map((provider) => {
                   const source = settings.credentialSources[provider.id];
                   const change = credentials[provider.id];
                   const removing = change === null;
@@ -310,7 +421,9 @@ export function ProviderSettingsDialog({
                 })}
               </div>
             </section>
+            )}
 
+            {connectionMode === 'local' && (
             <section className="settings-section local-provider-settings">
               <div className="settings-section-heading"><div><h3>Local Ollama</h3><p>Use the default local service or another Ollama host you control.</p></div></div>
               <div className="settings-field-grid">
@@ -318,37 +431,14 @@ export function ProviderSettingsDialog({
                 <label className="settings-field"><span>Preferred model</span><input value={models.ollama} onChange={(event) => updateModel('ollama', event.target.value)} /></label>
               </div>
             </section>
+            )}
 
+            {connectionMode === 'cli' && (
             <section className="settings-section local-provider-settings">
-              <div className="settings-section-heading"><div><h3>Command-line AI</h3><p>Pick the AI CLI you already use. Octave checks your system PATH and opens the CLI's own account setup in a terminal.</p></div></div>
-              <div className="cli-provider-grid">
-                {CLI_PRESETS.map((preset) => {
-                  const selected = preset.id === cliPresetId;
-                  const status = cliInstallStatus[preset.id];
-                  const custom = preset.id === 'custom';
-                  return (
-                    <article className={`cli-provider-card ${selected ? 'selected' : ''}`} key={preset.id}>
-                      <button type="button" onClick={() => chooseCliPreset(preset.id)} aria-pressed={selected}>
-                        <span className={`cli-provider-mark ${status.installed ? 'installed' : ''}`}>{custom ? '...' : preset.name.slice(0, 1)}</span>
-                        <strong>{preset.name}</strong>
-                        <small>{preset.detail}</small>
-                        <em>{custom ? 'Manual setup' : cliInstallLabel(status)}</em>
-                      </button>
-                      <div>
-                        <button className="text-button" type="button" onClick={() => { chooseCliPreset(preset.id); void checkCli(preset.id); }} disabled={saving || custom}>
-                          Check
-                        </button>
-                        <button className="text-button" type="button" onClick={() => { chooseCliPreset(preset.id); void launchCliSetup({ command: preset.command, setupArgs: preset.setupArgs, name: preset.name }); }} disabled={saving || custom}>
-                          Connect
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+              <div className="settings-section-heading"><div><h3>Command-line sign-in</h3><p>Octave will use the installed CLI for this platform and keep API keys out of Octave.</p></div></div>
               <div className="cli-selected-summary">
                 <strong>{CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.name ?? 'Command-line AI'}</strong>
-                <span>{cliPresetId === 'custom' ? 'Enter the executable and arguments in Advanced.' : `Uses your ${CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.account ?? 'CLI'} sign-in. No API key is stored in Octave.`}</span>
+                <span>{cliPresetId === 'custom' ? 'Enter the executable and arguments in Advanced.' : `Uses your ${CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.account ?? 'CLI'} sign-in with ${models.cli || findPlatform(platformId).frontierModel} by default.`}</span>
                 <div>
                   <button className="button button-secondary" type="button" onClick={() => void checkCli()} disabled={saving || !cliCommand.trim()}>Check installed</button>
                   <button className="button button-primary" type="button" onClick={() => void launchCliSetup()} disabled={saving || !cliCommand.trim()}>Connect account</button>
@@ -365,6 +455,7 @@ export function ProviderSettingsDialog({
               </details>
               {cliStatus && <p className={`cli-setup-status ${cliStatusKind}`}>{cliStatus}</p>}
             </section>
+            )}
 
             {problem && <div className="settings-error" role="alert">{problem}</div>}
           </div>
@@ -408,4 +499,56 @@ function findCliPreset(command: string, args: string): typeof CLI_PRESETS[number
 function cliInstallLabel(status: CliInstallStatus[CliPresetId]): string {
   if (!status.checked) return 'Checking install...';
   return status.installed ? 'Installed' : 'Not found';
+}
+
+function findPlatform(id: PlatformId): PlatformOption {
+  const platform = PLATFORMS.find((candidate) => candidate.id === id);
+  if (!platform) throw new Error('Unknown AI platform.');
+  return platform;
+}
+
+function findCliPresetById(id: Exclude<CliPresetId, 'custom'>): typeof CLI_PRESETS[number] {
+  const preset = CLI_PRESETS.find((candidate) => candidate.id === id);
+  if (!preset) throw new Error('Unknown CLI preset.');
+  return preset;
+}
+
+function connectionModesFor(platform: PlatformOption): ConnectionMode[] {
+  const modes: ConnectionMode[] = [];
+  if (platform.apiProvider) modes.push('api');
+  if (platform.cliPreset) modes.push('cli');
+  if (platform.localProvider) modes.push('local');
+  if (platform.demoProvider) modes.push('demo');
+  return modes;
+}
+
+function defaultConnectionMode(platform: PlatformOption, preferred: ConnectionMode): ConnectionMode {
+  const modes = connectionModesFor(platform);
+  return modes.includes(preferred) ? preferred : modes[0] ?? 'demo';
+}
+
+function connectionModeLabel(mode: ConnectionMode): string {
+  if (mode === 'api') return 'API key';
+  if (mode === 'cli') return 'CLI login';
+  if (mode === 'local') return 'Local';
+  return 'Demo';
+}
+
+function inferPlatformSelection(defaultProvider: DesktopProviderId, cliPresetId: CliPresetId): { platform: PlatformOption; mode: ConnectionMode } {
+  if (defaultProvider === 'cli') {
+    const platform = PLATFORMS.find((candidate) => candidate.cliPreset === cliPresetId)
+      ?? PLATFORMS.find((candidate) => candidate.cliPreset === 'codex');
+    if (platform) return { platform, mode: 'cli' };
+  }
+
+  const platform = PLATFORMS.find((candidate) => candidate.apiProvider === defaultProvider)
+    ?? PLATFORMS.find((candidate) => candidate.localProvider === defaultProvider)
+    ?? PLATFORMS.find((candidate) => candidate.demoProvider === defaultProvider)
+    ?? PLATFORMS[0];
+  if (!platform) throw new Error('No AI platforms are configured.');
+
+  if (platform.apiProvider === defaultProvider) return { platform, mode: 'api' };
+  if (platform.localProvider === defaultProvider) return { platform, mode: 'local' };
+  if (platform.demoProvider === defaultProvider) return { platform, mode: 'demo' };
+  return { platform, mode: defaultConnectionMode(platform, 'api') };
 }

@@ -58,7 +58,7 @@ export async function listProviderStatus(): Promise<ProviderStatus[]> {
       }
     }
     if (provider.id === 'cli') {
-      const configuredModel = process.env.OCTAVE_CLI_MODEL ?? 'cli';
+      const configuredModel = process.env.OCTAVE_CLI_MODEL ?? 'gpt-5.6-sol';
       if (!models.some((model) => model.id === configuredModel)) {
         models.unshift({ id: configuredModel, name: `${configuredModel} (configured default)` });
       }
