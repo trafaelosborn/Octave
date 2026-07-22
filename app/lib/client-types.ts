@@ -290,10 +290,24 @@ export interface DesktopProviderSettingsInput {
 
 export interface OctaveDesktopBridge {
   isDesktop: true;
-  checkCliProvider: (input: { command: string }) => Promise<{ installed: boolean; path: string | null }>;
+  checkCliProvider: (input: { command: string }) => Promise<{
+    installed: boolean;
+    path: string | null;
+    onPath: boolean;
+    needsPathRepair: boolean;
+    pathDirectory: string | null;
+  }>;
   getProviderSettings: () => Promise<DesktopProviderSettings>;
   installCliProvider: (input: { preset: 'codex' | 'claude' | 'gemini' }) => Promise<{ launched: true }>;
   launchCliProviderSetup: (input: { command: string; args: string }) => Promise<{ launched: true }>;
+  repairCliProviderPath: (input: { command: string }) => Promise<{
+    installed: boolean;
+    path: string | null;
+    onPath: boolean;
+    needsPathRepair: boolean;
+    pathDirectory: string | null;
+    repaired: boolean;
+  }>;
   pickWorkspace: () => Promise<string | null>;
   saveProviderSettings: (settings: DesktopProviderSettingsInput) => Promise<DesktopProviderSettings>;
 }

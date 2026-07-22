@@ -5,9 +5,17 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { INSTALL_COMMANDS, augmentPathEnvironment, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
+const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkCliProvider, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
   INSTALL_COMMANDS: Record<string, string>;
   augmentPathEnvironment: (environment?: Record<string, string | undefined>) => Record<string, string>;
+  buildPathWithDirectory: (entries: string[], directory: string) => string;
+  checkCliProvider: (command: string, environment?: Record<string, string | undefined>) => Promise<{
+    installed: boolean;
+    path: string | null;
+    onPath: boolean;
+    needsPathRepair: boolean;
+    pathDirectory: string | null;
+  }>;
   parseShellWords: (input: string) => string[];
   resolveExecutable: (command: string, environment?: Record<string, string | undefined>) => Promise<string | null>;
 };
@@ -47,6 +55,38 @@ describe('desktop CLI provider setup', () => {
     const environment = { PATH: '', USERPROFILE: home, HOME: home, PATHEXT: '.EXE;.CMD;.BAT;.COM' };
     expect(augmentPathEnvironment(environment).PATH).toContain(path.join(home, '.local', 'bin'));
     expect(await resolveExecutable('claude', environment)).toBe(executablePath);
+  });
+
+  it('reports when an auto-discovered CLI needs user PATH repair', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'octave-cli-health-'));
+    temporaryDirectories.push(home);
+    const binDirectory = path.join(home, '.local', 'bin');
+    await fs.mkdir(binDirectory, { recursive: true });
+    const executablePath = path.join(binDirectory, process.platform === 'win32' ? 'codex.CMD' : 'codex');
+    await fs.writeFile(executablePath, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n', 'utf8');
+    if (process.platform !== 'win32') await fs.chmod(executablePath, 0o755);
+
+    const health = await checkCliProvider('codex', {
+      PATH: '',
+      USERPROFILE: home,
+      HOME: home,
+      PATHEXT: '.EXE;.CMD;.BAT;.COM',
+    });
+
+    expect(health).toMatchObject({
+      installed: true,
+      path: executablePath,
+      onPath: false,
+      needsPathRepair: true,
+      pathDirectory: binDirectory,
+    });
+  });
+
+  it('adds CLI install directories to PATH without duplicating entries', () => {
+    const first = buildPathWithDirectory(['C:\\Tools'], 'C:\\Users\\Clem\\.local\\bin\\');
+    const second = buildPathWithDirectory(first.split(path.delimiter), 'C:\\Users\\Clem\\.local\\bin');
+
+    expect(second.split(path.delimiter).filter((entry) => entry.toLowerCase() === 'c:\\users\\clem\\.local\\bin')).toHaveLength(1);
   });
 
   it('parses setup arguments without invoking a shell parser', () => {

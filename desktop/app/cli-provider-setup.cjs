@@ -26,15 +26,49 @@ function augmentPathEnvironment(environment = process.env) {
 }
 
 async function resolveExecutable(command, environment = process.env) {
+  return resolveExecutableFromPath(command, augmentPathEnvironment(environment), environment);
+}
+
+async function checkCliProvider(command, environment = process.env) {
+  const onPath = await resolveExecutableFromPath(command, environment, environment);
+  const resolvedPath = onPath ?? await resolveExecutable(command, environment);
+  const pathDirectory = resolvedPath ? path.dirname(resolvedPath) : null;
+  return {
+    installed: Boolean(resolvedPath),
+    path: resolvedPath,
+    onPath: Boolean(onPath),
+    needsPathRepair: Boolean(resolvedPath && !onPath),
+    pathDirectory,
+  };
+}
+
+async function repairCliProviderPath(command, environment = process.env) {
+  const health = await checkCliProvider(command, environment);
+  if (!health.installed || !health.pathDirectory) {
+    throw new Error(`Command not found: ${normalizeCommand(command) || '(empty)'}`);
+  }
+  if (health.onPath) return { ...health, repaired: false };
+  await addDirectoryToUserPath(health.pathDirectory, environment);
+  return {
+    ...(await checkCliProvider(command, {
+      ...environment,
+      PATH: buildPathWithDirectory(pathEntries(environment), health.pathDirectory),
+      Path: buildPathWithDirectory(pathEntries(environment), health.pathDirectory),
+    })),
+    repaired: true,
+  };
+}
+
+async function resolveExecutableFromPath(command, pathEnvironment, extensionEnvironment = pathEnvironment) {
   const normalized = normalizeCommand(command);
   if (!normalized) return null;
   if (path.isAbsolute(normalized) || normalized.includes(path.sep) || (path.sep === '\\' && normalized.includes('/'))) {
     return (await isFile(normalized)) ? normalized : null;
   }
 
-  const directories = pathEntries(augmentPathEnvironment(environment));
+  const directories = pathEntries(pathEnvironment);
   const extensions = process.platform === 'win32'
-    ? String(environment.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
+    ? String(extensionEnvironment.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
     : [''];
 
   for (const directory of directories) {
@@ -44,6 +78,40 @@ async function resolveExecutable(command, environment = process.env) {
     }
   }
   return null;
+}
+
+async function addDirectoryToUserPath(directory, environment = process.env) {
+  const normalized = normalizeDirectory(directory);
+  if (!normalized) throw new Error('Cannot repair PATH without an install directory.');
+  if (process.platform !== 'win32') {
+    throw new Error('Automatic user PATH repair is currently supported only on Windows.');
+  }
+  await new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      [
+        '$directory = $args[0]',
+        '$current = [Environment]::GetEnvironmentVariable("Path", "User")',
+        '$entries = @()',
+        'if ($current) { $entries = $current -split [IO.Path]::PathSeparator | Where-Object { $_ } }',
+        '$exists = $entries | Where-Object { $_.TrimEnd("\\", "/").ToLowerInvariant() -eq $directory.TrimEnd("\\", "/").ToLowerInvariant() }',
+        'if (-not $exists) { $entries += $directory }',
+        '[Environment]::SetEnvironmentVariable("Path", ($entries -join [IO.Path]::PathSeparator), "User")',
+      ].join('; '),
+      normalized,
+    ], { stdio: 'ignore', windowsHide: true, env: environment });
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`PATH repair exited with code ${code ?? 'unknown'}.`));
+    });
+  });
+  const nextProcessPath = buildPathWithDirectory(pathEntries(environment), normalized);
+  process.env.PATH = nextProcessPath;
+  process.env.Path = nextProcessPath;
 }
 
 async function launchCliSetup({ command, args }) {
@@ -150,6 +218,15 @@ function pathEntries(environment) {
   return String(environment.PATH ?? environment.Path ?? '').split(path.delimiter).filter(Boolean);
 }
 
+function buildPathWithDirectory(entries, directory) {
+  const normalized = normalizeDirectory(directory);
+  if (!normalized) return entries.join(path.delimiter);
+  const nextEntries = entries.filter(Boolean);
+  const seen = new Set(nextEntries.map((entry) => normalizePathKey(entry)));
+  if (!seen.has(normalizePathKey(normalized))) nextEntries.push(normalized);
+  return nextEntries.join(path.delimiter);
+}
+
 function candidateCliDirectories(environment) {
   const home = environment.USERPROFILE ?? environment.HOME;
   const localAppData = environment.LOCALAPPDATA;
@@ -164,7 +241,13 @@ function candidateCliDirectories(environment) {
 }
 
 function normalizePathKey(value) {
-  return process.platform === 'win32' ? value.toLowerCase() : value;
+  const normalized = normalizeDirectory(value);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function normalizeDirectory(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/[\\/]+$/, '');
 }
 
 async function resolveFirstExecutable(commands) {
@@ -186,8 +269,11 @@ async function isFile(filePath) {
 module.exports = {
   INSTALL_COMMANDS,
   augmentPathEnvironment,
+  buildPathWithDirectory,
+  checkCliProvider,
   launchCliInstall,
   launchCliSetup,
   parseShellWords,
+  repairCliProviderPath,
   resolveExecutable,
 };

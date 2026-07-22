@@ -11,7 +11,15 @@ import { Icon } from './Icon';
 
 type CliPresetId = 'codex' | 'claude' | 'gemini' | 'custom';
 type CliStatusKind = 'idle' | 'ok' | 'warn' | 'error';
-type CliInstallStatus = Record<CliPresetId, { checked: boolean; installed: boolean; path: string | null }>;
+type CliHealth = {
+  checked: boolean;
+  installed: boolean;
+  path: string | null;
+  onPath: boolean;
+  needsPathRepair: boolean;
+  pathDirectory: string | null;
+};
+type CliInstallStatus = Record<CliPresetId, CliHealth>;
 type PlatformId = 'openai' | 'anthropic' | 'xai' | 'gemini' | 'ollama' | 'demo';
 type ConnectionMode = 'api' | 'cli' | 'local' | 'demo';
 type ModelChoice = { id: string; name: string; detail?: string };
@@ -88,10 +96,10 @@ const CLI_PRESETS: Array<{
 ];
 
 const CLI_INSTALL_EMPTY: CliInstallStatus = {
-  codex: { checked: false, installed: false, path: null },
-  claude: { checked: false, installed: false, path: null },
-  gemini: { checked: false, installed: false, path: null },
-  custom: { checked: false, installed: false, path: null },
+  codex: emptyCliHealth(),
+  claude: emptyCliHealth(),
+  gemini: emptyCliHealth(),
+  custom: emptyCliHealth(),
 };
 
 const CLOUD_PROVIDERS: Array<{ id: DesktopCloudProviderId; name: string; keyLabel: string }> = [
@@ -311,9 +319,16 @@ export function ProviderSettingsDialog({
     const entries = await Promise.all(CLI_PRESETS.filter((preset) => preset.id !== 'custom').map(async (preset) => {
       try {
         const result = await window.octaveDesktop?.checkCliProvider({ command: preset.command });
-        return [preset.id, { checked: true, installed: Boolean(result?.installed), path: result?.path ?? null }] as const;
+        return [preset.id, {
+          checked: true,
+          installed: Boolean(result?.installed),
+          path: result?.path ?? null,
+          onPath: Boolean(result?.onPath),
+          needsPathRepair: Boolean(result?.needsPathRepair),
+          pathDirectory: result?.pathDirectory ?? null,
+        }] as const;
       } catch {
-        return [preset.id, { checked: true, installed: false, path: null }] as const;
+        return [preset.id, emptyCliHealth(true)] as const;
       }
     }));
     setCliInstallStatus((current) => ({ ...current, ...Object.fromEntries(entries) }));
@@ -333,10 +348,17 @@ export function ProviderSettingsDialog({
       const result = await window.octaveDesktop.checkCliProvider({ command });
       setCliInstallStatus((current) => ({
         ...current,
-        [presetId]: { checked: true, installed: result.installed, path: result.path },
+        [presetId]: {
+          checked: true,
+          installed: result.installed,
+          path: result.path,
+          onPath: result.onPath,
+          needsPathRepair: result.needsPathRepair,
+          pathDirectory: result.pathDirectory,
+        },
       }));
       setCliStatus(result.installed
-        ? `${preset?.name ?? 'CLI'} is installed.`
+        ? cliHealthMessage(preset, { checked: true, ...result })
         : missingCliMessage(preset));
       setCliStatusKind(result.installed ? 'ok' : 'warn');
       return result.installed;
@@ -387,6 +409,39 @@ export function ProviderSettingsDialog({
     try {
       await window.octaveDesktop.installCliProvider({ preset: cliPresetId as 'codex' | 'claude' | 'gemini' });
       setCliStatus(`${preset?.name ?? 'CLI'} installer opened. Finish the install there, restart Octave if PATH changed, then Check installed.`);
+      setCliStatusKind('ok');
+    } catch (error) {
+      setCliStatus(error instanceof Error ? error.message : String(error));
+      setCliStatusKind('error');
+    }
+  }
+
+  async function repairCliPath(presetId: CliPresetId = cliPresetId): Promise<void> {
+    if (!window.octaveDesktop) {
+      setCliStatus('Open the desktop app to repair PATH.');
+      setCliStatusKind('warn');
+      return;
+    }
+    const preset = CLI_PRESETS.find((candidate) => candidate.id === presetId);
+    const command = presetId === cliPresetId || preset?.id === 'custom' ? cliCommand : preset?.command ?? cliCommand;
+    setCliStatus('Repairing PATH...');
+    setCliStatusKind('idle');
+    try {
+      const result = await window.octaveDesktop.repairCliProviderPath({ command });
+      setCliInstallStatus((current) => ({
+        ...current,
+        [presetId]: {
+          checked: true,
+          installed: result.installed,
+          path: result.path,
+          onPath: result.onPath,
+          needsPathRepair: result.needsPathRepair,
+          pathDirectory: result.pathDirectory,
+        },
+      }));
+      setCliStatus(result.repaired
+        ? `${preset?.name ?? 'CLI'} install directory was added to your Windows user PATH. Restart terminals to pick it up.`
+        : `${preset?.name ?? 'CLI'} is already on PATH.`);
       setCliStatusKind('ok');
     } catch (error) {
       setCliStatus(error instanceof Error ? error.message : String(error));
@@ -522,6 +577,12 @@ export function ProviderSettingsDialog({
                     <>
                       <strong>{preset?.name ?? 'Command-line AI'}</strong>
                       <span>{cliPresetId === 'custom' ? 'Enter the executable and arguments in Advanced.' : `Uses your ${preset?.account ?? 'CLI'} sign-in with ${models.cli || findPlatform(platformId).frontierModel} by default.`}</span>
+                      {preset && status.checked && status.installed && (
+                        <p className={`cli-health-line ${status.needsPathRepair ? 'warn' : 'ok'}`}>
+                          <span>{cliHealthMessage(preset, status)}</span>
+                          {status.path && <code>{status.path}</code>}
+                        </p>
+                      )}
                       {preset && status.checked && !status.installed && (
                         <p className="cli-install-help">
                           <span>{missingCliMessage(preset)}</span>
@@ -537,6 +598,9 @@ export function ProviderSettingsDialog({
                 })()}
                 <div>
                   <button className="button button-secondary" type="button" onClick={() => void checkCli()} disabled={saving || !cliCommand.trim()}>Check installed</button>
+                  {cliInstallStatus[cliPresetId]?.needsPathRepair && (
+                    <button className="button button-secondary" type="button" onClick={() => void repairCliPath()} disabled={saving || !cliCommand.trim()}>Repair PATH</button>
+                  )}
                   <button className="button button-primary" type="button" onClick={() => void launchCliSetup()} disabled={saving || !cliCommand.trim()}>Connect account</button>
                 </div>
               </div>
@@ -590,6 +654,26 @@ function credentialPlaceholder(source: DesktopProviderSettings['credentialSource
   if (source === 'saved') return 'Saved securely';
   if (source === 'environment') return 'Using environment configuration';
   return 'Paste a new key';
+}
+
+function emptyCliHealth(checked = false): CliHealth {
+  return {
+    checked,
+    installed: false,
+    path: null,
+    onPath: false,
+    needsPathRepair: false,
+    pathDirectory: null,
+  };
+}
+
+function cliHealthMessage(preset: typeof CLI_PRESETS[number] | undefined, health: CliHealth): string {
+  const name = preset?.name ?? 'CLI';
+  if (!health.installed) return missingCliMessage(preset);
+  if (health.needsPathRepair) {
+    return `${name} is installed, and Octave can use it, but its folder is not on your Windows PATH yet.`;
+  }
+  return `${name} is installed and available on PATH.`;
 }
 
 function ModelSelect({

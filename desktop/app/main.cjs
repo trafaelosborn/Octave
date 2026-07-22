@@ -14,9 +14,10 @@ const {
 } = require('./provider-settings.cjs');
 const {
   augmentPathEnvironment,
+  checkCliProvider,
   launchCliInstall,
   launchCliSetup,
-  resolveExecutable,
+  repairCliProviderPath,
 } = require('./cli-provider-setup.cjs');
 const {
   findOpenPort,
@@ -210,8 +211,12 @@ function registerDesktopBridge() {
   ipcMain.handle('octave:check-cli-provider', async (event, input) => {
     assertTrustedDesktopSender(event);
     const command = input && typeof input === 'object' ? input.command : '';
-    const resolvedPath = await resolveExecutable(command);
-    return { installed: Boolean(resolvedPath), path: resolvedPath };
+    return checkCliProvider(command);
+  });
+  ipcMain.handle('octave:repair-cli-provider-path', async (event, input) => {
+    assertTrustedDesktopSender(event);
+    const command = input && typeof input === 'object' ? input.command : '';
+    return repairCliProviderPath(command);
   });
   ipcMain.handle('octave:launch-cli-provider-setup', async (event, input) => {
     assertTrustedDesktopSender(event);
