@@ -588,6 +588,9 @@ button { border: 0; }
 .cli-selected-summary strong { font-size: 12px; }
 .cli-selected-summary span { color: var(--muted); font-size: 11px; line-height: 1.4; }
 .cli-selected-summary > div { display: flex; gap: 8px; grid-row: span 2; }
+.cli-install-help { background: #fff9e8; border: 1px solid #eadcaf; border-radius: 7px; color: #725a18; display: grid; font-size: 10px; gap: 7px; grid-column: 1 / -1; line-height: 1.45; margin: 8px 0 0; padding: 9px 10px; }
+.cli-install-help code { background: #fff; border: 1px solid #eadcaf; border-radius: 5px; color: #5b4711; font-family: var(--font-mono); font-size: 9px; overflow-x: auto; padding: 6px; white-space: nowrap; }
+.cli-install-help a { color: var(--accent); font-weight: 800; text-decoration: none; }
 .cli-advanced-settings { border: 1px solid var(--line-soft); border-radius: 8px; margin-top: 12px; padding: 10px 12px 12px; }
 .cli-advanced-settings summary { color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .cli-setup-actions { align-items: end; display: flex; gap: 8px; justify-content: flex-end; }

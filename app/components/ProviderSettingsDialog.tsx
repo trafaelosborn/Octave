@@ -35,6 +35,8 @@ const CLI_PRESETS: Array<{
   model: string;
   detail: string;
   account: string;
+  installUrl?: string;
+  installCommand?: string;
 }> = [
   {
     id: 'codex',
@@ -45,6 +47,8 @@ const CLI_PRESETS: Array<{
     model: 'gpt-5.6-sol',
     detail: 'OpenAI account through the Codex CLI',
     account: 'OpenAI',
+    installUrl: 'https://github.com/openai/codex',
+    installCommand: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
   },
   {
     id: 'claude',
@@ -55,6 +59,8 @@ const CLI_PRESETS: Array<{
     model: 'claude-sonnet-4-20250514',
     detail: 'Anthropic account through Claude Code',
     account: 'Anthropic',
+    installUrl: 'https://code.claude.com/docs/en/setup',
+    installCommand: 'irm https://claude.ai/install.ps1 | iex',
   },
   {
     id: 'gemini',
@@ -65,6 +71,8 @@ const CLI_PRESETS: Array<{
     model: 'gemini-2.5-pro',
     detail: 'Google account through Gemini CLI',
     account: 'Google',
+    installUrl: 'https://geminicli.com/docs/get-started/installation/',
+    installCommand: 'npm install -g @google/gemini-cli',
   },
   {
     id: 'custom',
@@ -274,11 +282,11 @@ export function ProviderSettingsDialog({
     setCliInstallStatus((current) => ({ ...current, ...Object.fromEntries(entries) }));
   }
 
-  async function checkCli(presetId: CliPresetId = cliPresetId): Promise<void> {
+  async function checkCli(presetId: CliPresetId = cliPresetId): Promise<boolean> {
     if (!window.octaveDesktop) {
       setCliStatus('Open the desktop app to check local CLI tools.');
       setCliStatusKind('warn');
-      return;
+      return false;
     }
     const preset = CLI_PRESETS.find((candidate) => candidate.id === presetId);
     const command = presetId === cliPresetId || preset?.id === 'custom' ? cliCommand : preset?.command ?? cliCommand;
@@ -292,11 +300,13 @@ export function ProviderSettingsDialog({
       }));
       setCliStatus(result.installed
         ? `${preset?.name ?? 'CLI'} is installed.`
-        : `${preset?.name ?? 'CLI'} was not found on PATH.`);
+        : missingCliMessage(preset));
       setCliStatusKind(result.installed ? 'ok' : 'warn');
+      return result.installed;
     } catch (error) {
       setCliStatus(error instanceof Error ? error.message : String(error));
       setCliStatusKind('error');
+      return false;
     }
   }
 
@@ -309,6 +319,8 @@ export function ProviderSettingsDialog({
     const command = input.command ?? cliCommand;
     const args = input.setupArgs ?? cliSetupArgs;
     const name = input.name ?? CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.name ?? 'CLI';
+    const preset = CLI_PRESETS.find((candidate) => candidate.command === command) ?? CLI_PRESETS.find((candidate) => candidate.id === cliPresetId);
+    if (!(await checkCli(preset?.id ?? cliPresetId))) return;
     setCliStatus('Opening sign-in terminal...');
     setCliStatusKind('idle');
     try {
@@ -437,8 +449,23 @@ export function ProviderSettingsDialog({
             <section className="settings-section local-provider-settings">
               <div className="settings-section-heading"><div><h3>Command-line sign-in</h3><p>Octave will use the installed CLI for this platform and keep API keys out of Octave.</p></div></div>
               <div className="cli-selected-summary">
-                <strong>{CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.name ?? 'Command-line AI'}</strong>
-                <span>{cliPresetId === 'custom' ? 'Enter the executable and arguments in Advanced.' : `Uses your ${CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.account ?? 'CLI'} sign-in with ${models.cli || findPlatform(platformId).frontierModel} by default.`}</span>
+                {(() => {
+                  const preset = CLI_PRESETS.find((candidate) => candidate.id === cliPresetId);
+                  const status = cliInstallStatus[cliPresetId];
+                  return (
+                    <>
+                      <strong>{preset?.name ?? 'Command-line AI'}</strong>
+                      <span>{cliPresetId === 'custom' ? 'Enter the executable and arguments in Advanced.' : `Uses your ${preset?.account ?? 'CLI'} sign-in with ${models.cli || findPlatform(platformId).frontierModel} by default.`}</span>
+                      {preset && status.checked && !status.installed && (
+                        <p className="cli-install-help">
+                          <span>{missingCliMessage(preset)}</span>
+                          {preset.installCommand && <code>{preset.installCommand}</code>}
+                          {preset.installUrl && <a href={preset.installUrl} target="_blank" rel="noreferrer">Open install docs</a>}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
                 <div>
                   <button className="button button-secondary" type="button" onClick={() => void checkCli()} disabled={saving || !cliCommand.trim()}>Check installed</button>
                   <button className="button button-primary" type="button" onClick={() => void launchCliSetup()} disabled={saving || !cliCommand.trim()}>Connect account</button>
@@ -499,6 +526,11 @@ function findCliPreset(command: string, args: string): typeof CLI_PRESETS[number
 function cliInstallLabel(status: CliInstallStatus[CliPresetId]): string {
   if (!status.checked) return 'Checking install...';
   return status.installed ? 'Installed' : 'Not found';
+}
+
+function missingCliMessage(preset?: typeof CLI_PRESETS[number]): string {
+  if (!preset) return 'This command was not found on PATH. Install it or choose API key instead.';
+  return `${preset.name} is not installed or is not on PATH. Install it, then restart Octave or choose API key instead.`;
 }
 
 function findPlatform(id: PlatformId): PlatformOption {
