@@ -8,6 +8,23 @@ const INSTALL_COMMANDS = Object.freeze({
   gemini: 'npm install -g @google/gemini-cli',
 });
 
+function augmentPathEnvironment(environment = process.env) {
+  const entries = pathEntries(environment);
+  const seen = new Set(entries.map((entry) => normalizePathKey(entry)));
+  for (const directory of candidateCliDirectories(environment)) {
+    const key = normalizePathKey(directory);
+    if (!seen.has(key)) {
+      entries.push(directory);
+      seen.add(key);
+    }
+  }
+  return {
+    ...environment,
+    PATH: entries.join(path.delimiter),
+    Path: entries.join(path.delimiter),
+  };
+}
+
 async function resolveExecutable(command, environment = process.env) {
   const normalized = normalizeCommand(command);
   if (!normalized) return null;
@@ -15,7 +32,7 @@ async function resolveExecutable(command, environment = process.env) {
     return (await isFile(normalized)) ? normalized : null;
   }
 
-  const directories = String(environment.PATH ?? '').split(path.delimiter).filter(Boolean);
+  const directories = pathEntries(augmentPathEnvironment(environment));
   const extensions = process.platform === 'win32'
     ? String(environment.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
     : [''];
@@ -129,6 +146,27 @@ function hasExtension(command, extensions) {
   return extensions.some((extension) => lower.endsWith(extension.toLowerCase()));
 }
 
+function pathEntries(environment) {
+  return String(environment.PATH ?? environment.Path ?? '').split(path.delimiter).filter(Boolean);
+}
+
+function candidateCliDirectories(environment) {
+  const home = environment.USERPROFILE ?? environment.HOME;
+  const localAppData = environment.LOCALAPPDATA;
+  return [
+    home ? path.join(home, '.local', 'bin') : '',
+    home ? path.join(home, '.claude', 'local') : '',
+    home ? path.join(home, '.codex', 'bin') : '',
+    home ? path.join(home, '.gemini', 'bin') : '',
+    localAppData ? path.join(localAppData, 'Programs', 'Claude', 'bin') : '',
+    localAppData ? path.join(localAppData, 'Programs', 'Claude Code', 'bin') : '',
+  ].filter(Boolean);
+}
+
+function normalizePathKey(value) {
+  return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
 async function resolveFirstExecutable(commands) {
   for (const command of commands) {
     const resolved = await resolveExecutable(command);
@@ -147,6 +185,7 @@ async function isFile(filePath) {
 
 module.exports = {
   INSTALL_COMMANDS,
+  augmentPathEnvironment,
   launchCliInstall,
   launchCliSetup,
   parseShellWords,

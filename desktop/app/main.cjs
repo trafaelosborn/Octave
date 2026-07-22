@@ -13,6 +13,7 @@ const {
   createSafeStorageEncryption,
 } = require('./provider-settings.cjs');
 const {
+  augmentPathEnvironment,
   launchCliInstall,
   launchCliSetup,
   resolveExecutable,
@@ -76,14 +77,14 @@ async function startLocalApplication() {
   const port = await findOpenPort();
   const url = `http://127.0.0.1:${port}`;
   const configDirectory = path.join(app.getPath('userData'), 'state');
-  const serverEnvironment = {
+  const serverEnvironment = augmentPathEnvironment({
     ...process.env,
     ...providerEnvironment,
     HOSTNAME: '127.0.0.1',
     OCTAVE_CONFIG_DIR: configDirectory,
     OCTAVE_DESKTOP: '1',
     PORT: String(port),
-  };
+  });
   const developmentRoot = process.env.OCTAVE_DESKTOP_PROJECT_ROOT?.trim();
   if (developmentRoot) {
     if (!path.isAbsolute(developmentRoot)) throw new Error('OCTAVE_DESKTOP_PROJECT_ROOT must be absolute.');

@@ -2,6 +2,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { augmentPathEnvironment } = require('./app/cli-provider-setup.cjs');
 const { findOpenPort, waitForHttp } = require('./app/runtime-utils.cjs');
 
 void smoke().catch((error) => {
@@ -18,13 +19,13 @@ async function smoke() {
   const origin = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, [serverFile], {
     cwd: runtimeDirectory,
-    env: {
+    env: augmentPathEnvironment({
       ...process.env,
       HOSTNAME: '127.0.0.1',
       NODE_ENV: 'production',
       OCTAVE_CONFIG_DIR: configDirectory,
       PORT: String(port),
-    },
+    }),
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
   });
