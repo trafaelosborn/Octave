@@ -76,6 +76,17 @@ describe('provider streaming', () => {
     expect(chunks.join('')).toBe('cli:true');
   });
 
+  it('passes selected models into command-line provider placeholders', async () => {
+    const provider = new CliProvider({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write(process.argv.slice(1).join("|"))', '--', '--model', '{model}'],
+      model: 'sonnet',
+    });
+    const chunks: string[] = [];
+    for await (const chunk of provider.streamChat([{ role: 'user', content: 'Hello' }], { model: 'opus' })) chunks.push(chunk);
+    expect(chunks.join('')).toBe('--model|opus');
+  });
+
   it('supports shell-like CLI argument parsing', () => {
     expect(parseShellWords('exec --model "gpt test" --flag\\ value')).toEqual(['exec', '--model', 'gpt test', '--flag value']);
   });

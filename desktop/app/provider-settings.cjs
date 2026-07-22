@@ -7,9 +7,13 @@ const DEFAULT_MODELS = Object.freeze({
   demo: 'demo',
   ollama: 'llama3.1',
   cli: 'gpt-5.6-sol',
-  anthropic: 'claude-sonnet-4-20250514',
+  anthropic: 'claude-sonnet-5',
   openai: 'gpt-5.6-sol',
   xai: 'grok-4.5-latest',
+});
+const MODEL_REPLACEMENTS = Object.freeze({
+  'claude-sonnet-4-20250514': 'claude-sonnet-5',
+  'claude-opus-4-20250514': 'claude-opus-4-8',
 });
 const KEY_ENVIRONMENT_VARIABLES = Object.freeze({
   anthropic: 'ANTHROPIC_API_KEY',
@@ -210,7 +214,7 @@ function normalizeModel(value, fallback) {
   const normalized = value.trim();
   if (!normalized) return fallback;
   if (normalized.length > 200) throw new Error('Provider model names must be 200 characters or fewer.');
-  return normalized;
+  return MODEL_REPLACEMENTS[normalized] || normalized;
 }
 
 function normalizeOllamaUrl(value, fallback) {

@@ -109,6 +109,35 @@ describe('Electron provider settings', () => {
     });
   });
 
+  it('migrates retired Claude model IDs when reading saved settings', async () => {
+    const { filePath, store } = await createStore();
+    await fs.writeFile(filePath, JSON.stringify({
+      version: 1,
+      completed: true,
+      defaultProvider: 'anthropic',
+      models: {
+        demo: 'demo',
+        ollama: 'llama3.1',
+        cli: 'claude-sonnet-4-20250514',
+        anthropic: 'claude-sonnet-4-20250514',
+        openai: 'gpt-5.6-sol',
+        xai: 'grok-4.5-latest',
+      },
+      ollamaBaseUrl: 'http://127.0.0.1:11434',
+      cliCommand: 'claude',
+      cliArgs: '-p --model {model}',
+      credentials: {},
+    }));
+
+    const settings = await store.getPublicSettings();
+    const environment = await store.getEnvironment();
+
+    expect(settings.models.anthropic).toBe('claude-sonnet-5');
+    expect(settings.models.cli).toBe('claude-sonnet-5');
+    expect(environment.ANTHROPIC_MODEL).toBe('claude-sonnet-5');
+    expect(environment.OCTAVE_CLI_MODEL).toBe('claude-sonnet-5');
+  });
+
   it('removes a saved key without erasing an environment credential', async () => {
     const { store } = await createStore({ OPENAI_API_KEY: 'environment-secret' });
     await store.save(settingsInput({ openai: 'saved-secret' }));

@@ -39,12 +39,13 @@ export class CliProvider implements LLMProvider {
     if (!this.command.trim()) throw new Error('OCTAVE_CLI_COMMAND is not set.');
     if (!(await commandExists(this.command))) throw new Error(`CLI provider command was not found: ${this.command}`);
 
-    const prompt = formatMessages(messages, options.model ?? this.defaultModel);
-    const args = this.args.map((argument) => argument.replaceAll('{prompt}', prompt));
+    const model = options.model ?? this.defaultModel;
+    const prompt = formatMessages(messages, model);
+    const args = this.args.map((argument) => argument.replaceAll('{prompt}', prompt).replaceAll('{model}', model));
     const sendsPromptOnArgv = this.args.some((argument) => argument.includes('{prompt}'));
     const child = spawn(this.command, args, {
       cwd: process.cwd(),
-      env: { ...process.env, OCTAVE_MODEL: options.model ?? this.defaultModel },
+      env: { ...process.env, OCTAVE_MODEL: model },
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

@@ -25,7 +25,7 @@ export class AnthropicProvider implements LLMProvider {
   constructor(options: AnthropicProviderOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY ?? '';
     this.baseUrl = (options.baseUrl ?? 'https://api.anthropic.com').replace(/\/$/, '');
-    this.defaultModel = options.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514';
+    this.defaultModel = options.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
   }
 
   async isAvailable(): Promise<boolean> {

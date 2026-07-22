@@ -14,6 +14,7 @@ type CliStatusKind = 'idle' | 'ok' | 'warn' | 'error';
 type CliInstallStatus = Record<CliPresetId, { checked: boolean; installed: boolean; path: string | null }>;
 type PlatformId = 'openai' | 'anthropic' | 'xai' | 'gemini' | 'ollama' | 'demo';
 type ConnectionMode = 'api' | 'cli' | 'local' | 'demo';
+type ModelChoice = { id: string; name: string; detail?: string };
 
 interface PlatformOption {
   id: PlatformId;
@@ -54,9 +55,9 @@ const CLI_PRESETS: Array<{
     id: 'claude',
     name: 'Claude Code',
     command: 'claude',
-    args: '-p',
+    args: '-p --model {model}',
     setupArgs: '',
-    model: 'claude-sonnet-4-20250514',
+    model: 'sonnet',
     detail: 'Anthropic account through Claude Code',
     account: 'Anthropic',
     installUrl: 'https://code.claude.com/docs/en/setup',
@@ -114,7 +115,7 @@ const PLATFORMS: PlatformOption[] = [
     detail: 'Claude frontier models through API keys or Claude Code.',
     apiProvider: 'anthropic',
     cliPreset: 'claude',
-    frontierModel: 'claude-sonnet-4-20250514',
+    frontierModel: 'claude-sonnet-5',
   },
   {
     id: 'xai',
@@ -145,6 +146,42 @@ const PLATFORMS: PlatformOption[] = [
     frontierModel: 'demo',
   },
 ];
+
+const API_MODEL_CHOICES: Partial<Record<DesktopCloudProviderId, ModelChoice[]>> = {
+  openai: [
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', detail: 'Frontier / highest capability' },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', detail: 'Balanced everyday work' },
+  ],
+  anthropic: [
+    { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', detail: 'Best speed/intelligence balance' },
+    { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', detail: 'Complex reasoning and agentic work' },
+    { id: 'claude-fable-5', name: 'Claude Fable 5', detail: 'Highest available capability, if your account has access' },
+    { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', detail: 'Fastest Claude option' },
+  ],
+  xai: [
+    { id: 'grok-4.5-latest', name: 'Grok 4.5 latest', detail: 'xAI frontier default' },
+  ],
+};
+
+const CLI_MODEL_CHOICES: Partial<Record<CliPresetId, ModelChoice[]>> = {
+  codex: [
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', detail: 'Frontier / highest capability' },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', detail: 'Balanced everyday work' },
+  ],
+  claude: [
+    { id: 'sonnet', name: 'Claude Sonnet', detail: 'Claude Code default daily frontier alias' },
+    { id: 'opus', name: 'Claude Opus', detail: 'Claude Code complex reasoning alias' },
+    { id: 'best', name: 'Best available Claude', detail: 'Uses Fable where available, otherwise latest Opus' },
+    { id: 'fable', name: 'Claude Fable', detail: 'Hardest and longest-running tasks, if available' },
+    { id: 'haiku', name: 'Claude Haiku', detail: 'Fast and efficient' },
+    { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', detail: 'Pinned API model ID' },
+    { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', detail: 'Pinned API model ID' },
+  ],
+  gemini: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', detail: 'Google frontier default' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', detail: 'Faster Gemini option' },
+  ],
+};
 
 export function ProviderSettingsDialog({
   open,
@@ -254,7 +291,7 @@ export function ProviderSettingsDialog({
       setCliCommand(preset.command);
       setCliArgs(preset.args);
       setCliSetupArgs(preset.setupArgs);
-      updateModel('cli', platform.frontierModel);
+      updateModel('cli', preset.model);
       setCliAdvancedOpen(false);
       return;
     }
@@ -441,7 +478,12 @@ export function ProviderSettingsDialog({
                       </label>
                       <label className="settings-field">
                         <span>Preferred model</span>
-                        <input value={models[provider.id]} onChange={(event) => updateModel(provider.id, event.target.value)} />
+                        <ModelSelect
+                          providerLabel={provider.name}
+                          value={models[provider.id]}
+                          choices={API_MODEL_CHOICES[provider.id] ?? []}
+                          onChange={(value) => updateModel(provider.id, value)}
+                        />
                       </label>
                       {source === 'saved' && (
                         <button
@@ -502,7 +544,15 @@ export function ProviderSettingsDialog({
                 <summary>Advanced CLI settings</summary>
                 <div className="settings-field-grid settings-field-spaced">
                   <label className="settings-field"><span>Command</span><input value={cliCommand} placeholder="codex" onChange={(event) => { setCliCommand(event.target.value); setCliPresetId('custom'); }} /></label>
-                  <label className="settings-field"><span>Preferred model</span><input value={models.cli} onChange={(event) => updateModel('cli', event.target.value)} /></label>
+                  <label className="settings-field">
+                    <span>Preferred model</span>
+                    <ModelSelect
+                      providerLabel={CLI_PRESETS.find((preset) => preset.id === cliPresetId)?.name ?? 'CLI'}
+                      value={models.cli}
+                      choices={CLI_MODEL_CHOICES[cliPresetId] ?? []}
+                      onChange={(value) => updateModel('cli', value)}
+                    />
+                  </label>
                 </div>
                 <label className="settings-field settings-field-spaced"><span>Prompt arguments</span><input value={cliArgs} placeholder="exec -" onChange={(event) => { setCliArgs(event.target.value); setCliPresetId('custom'); }} /></label>
                 <label className="settings-field settings-field-spaced"><span>Setup arguments</span><input value={cliSetupArgs} placeholder="login" onChange={(event) => setCliSetupArgs(event.target.value)} /></label>
@@ -540,6 +590,58 @@ function credentialPlaceholder(source: DesktopProviderSettings['credentialSource
   if (source === 'saved') return 'Saved securely';
   if (source === 'environment') return 'Using environment configuration';
   return 'Paste a new key';
+}
+
+function ModelSelect({
+  choices,
+  onChange,
+  providerLabel,
+  value,
+}: {
+  choices: ModelChoice[];
+  onChange: (value: string) => void;
+  providerLabel: string;
+  value: string;
+}) {
+  const hasChoices = choices.length > 0;
+  const selectedChoice = choices.find((choice) => choice.id === value);
+  const isCustom = hasChoices && !selectedChoice;
+
+  if (!hasChoices) {
+    return <input value={value} onChange={(event) => onChange(event.target.value)} />;
+  }
+
+  return (
+    <>
+      <select
+        aria-label={`${providerLabel} model`}
+        value={isCustom ? '__custom__' : value}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (nextValue === '__custom__') {
+            onChange('');
+            return;
+          }
+          onChange(nextValue);
+        }}
+      >
+        {choices.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.detail ? `${choice.name} — ${choice.detail}` : choice.name}
+          </option>
+        ))}
+        <option value="__custom__">Custom model…</option>
+      </select>
+      {isCustom && (
+        <input
+          aria-label={`${providerLabel} custom model`}
+          value={value}
+          placeholder="Enter custom model ID"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+    </>
+  );
 }
 
 function findCliPreset(command: string, args: string): typeof CLI_PRESETS[number] {
