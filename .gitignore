@@ -18,3 +18,5 @@ Thumbs.db
 octave-workspace/
 desktop/app/runtime/
 desktop/app/out/
+desktop/app/current/
+desktop/app/out-fresh/
