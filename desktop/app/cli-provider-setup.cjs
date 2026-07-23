@@ -1,11 +1,20 @@
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const INSTALL_COMMANDS = Object.freeze({
-  claude: 'irm https://claude.ai/install.ps1 | iex',
-  codex: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
-  gemini: 'npm install -g @google/gemini-cli',
+  claude: {
+    win32: 'irm https://claude.ai/install.ps1 | iex',
+    default: 'curl -fsSL https://claude.ai/install.sh | sh',
+  },
+  codex: {
+    win32: 'irm https://chatgpt.com/codex/install.ps1 | iex',
+    default: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
+  },
+  gemini: {
+    default: 'npm install -g @google/gemini-cli',
+  },
 });
 
 function augmentPathEnvironment(environment = process.env) {
@@ -135,7 +144,7 @@ async function launchCliSetup({ command, args }) {
 }
 
 async function launchCliInstall({ preset }) {
-  const installCommand = INSTALL_COMMANDS[preset];
+  const installCommand = installCommandFor(preset);
   if (!installCommand) throw new Error('Choose a supported CLI installer.');
 
   if (process.platform === 'win32') {
@@ -151,6 +160,12 @@ async function launchCliInstall({ preset }) {
   const terminal = await resolveFirstExecutable(['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'xterm']);
   if (!terminal) throw new Error('No supported terminal emulator was found.');
   spawn(terminal, ['-e', 'sh', '-lc', installCommand], { detached: true, stdio: 'ignore' }).unref();
+}
+
+function installCommandFor(preset, platform = process.platform) {
+  const command = INSTALL_COMMANDS[preset];
+  if (!command) return '';
+  return command[platform] ?? command.default ?? '';
 }
 
 function parseShellWords(input) {
@@ -230,14 +245,37 @@ function buildPathWithDirectory(entries, directory) {
 function candidateCliDirectories(environment) {
   const home = environment.USERPROFILE ?? environment.HOME;
   const localAppData = environment.LOCALAPPDATA;
+  const appData = environment.APPDATA;
   return [
     home ? path.join(home, '.local', 'bin') : '',
     home ? path.join(home, '.claude', 'local') : '',
     home ? path.join(home, '.codex', 'bin') : '',
     home ? path.join(home, '.gemini', 'bin') : '',
+    appData ? path.join(appData, 'npm') : '',
+    localAppData ? path.join(localAppData, 'npm') : '',
+    ...(home ? discoverVscodeCodexDirectories(home) : []),
     localAppData ? path.join(localAppData, 'Programs', 'Claude', 'bin') : '',
     localAppData ? path.join(localAppData, 'Programs', 'Claude Code', 'bin') : '',
   ].filter(Boolean);
+}
+
+function discoverVscodeCodexDirectories(home) {
+  const extensionRoots = [
+    path.join(home, '.vscode', 'extensions'),
+    path.join(home, '.vscode-insiders', 'extensions'),
+  ];
+  const directories = [];
+  for (const root of extensionRoots) {
+    try {
+      for (const entry of fsSync.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !entry.name.startsWith('openai.chatgpt-')) continue;
+        directories.push(path.join(root, entry.name, 'bin', process.platform === 'win32' ? 'windows-x86_64' : process.platform));
+      }
+    } catch {
+      // Missing VS Code extension folders are normal.
+    }
+  }
+  return directories;
 }
 
 function normalizePathKey(value) {
@@ -271,6 +309,7 @@ module.exports = {
   augmentPathEnvironment,
   buildPathWithDirectory,
   checkCliProvider,
+  installCommandFor,
   launchCliInstall,
   launchCliSetup,
   parseShellWords,

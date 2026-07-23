@@ -5,8 +5,8 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkCliProvider, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
-  INSTALL_COMMANDS: Record<string, string>;
+const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkCliProvider, installCommandFor, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
+  INSTALL_COMMANDS: Record<string, Record<string, string>>;
   augmentPathEnvironment: (environment?: Record<string, string | undefined>) => Record<string, string>;
   buildPathWithDirectory: (entries: string[], directory: string) => string;
   checkCliProvider: (command: string, environment?: Record<string, string | undefined>) => Promise<{
@@ -16,6 +16,7 @@ const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkC
     needsPathRepair: boolean;
     pathDirectory: string | null;
   }>;
+  installCommandFor: (preset: string, platform?: string) => string;
   parseShellWords: (input: string) => string[];
   resolveExecutable: (command: string, environment?: Record<string, string | undefined>) => Promise<string | null>;
 };
@@ -57,6 +58,29 @@ describe('desktop CLI provider setup', () => {
     expect(await resolveExecutable('claude', environment)).toBe(executablePath);
   });
 
+  it('auto-discovers npm global CLIs and Codex bundled with the VS Code extension', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'octave-cli-vscode-'));
+    const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'octave-cli-appdata-'));
+    temporaryDirectories.push(home, appData);
+
+    const npmDirectory = path.join(appData, 'npm');
+    await fs.mkdir(npmDirectory, { recursive: true });
+    const geminiPath = path.join(npmDirectory, process.platform === 'win32' ? 'gemini.CMD' : 'gemini');
+    await fs.writeFile(geminiPath, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n', 'utf8');
+    if (process.platform !== 'win32') await fs.chmod(geminiPath, 0o755);
+
+    const codexDirectory = path.join(home, '.vscode', 'extensions', 'openai.chatgpt-test-win32-x64', 'bin', process.platform === 'win32' ? 'windows-x86_64' : process.platform);
+    await fs.mkdir(codexDirectory, { recursive: true });
+    const codexPath = path.join(codexDirectory, process.platform === 'win32' ? 'codex.EXE' : 'codex');
+    await fs.writeFile(codexPath, process.platform === 'win32' ? 'placeholder' : '#!/bin/sh\n', 'utf8');
+    if (process.platform !== 'win32') await fs.chmod(codexPath, 0o755);
+
+    const environment = { PATH: '', USERPROFILE: home, HOME: home, APPDATA: appData, PATHEXT: '.EXE;.CMD;.BAT;.COM' };
+
+    expect(await resolveExecutable('gemini', environment)).toBe(geminiPath);
+    expect(await resolveExecutable('codex', environment)).toBe(codexPath);
+  });
+
   it('reports when an auto-discovered CLI needs user PATH repair', async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'octave-cli-health-'));
     temporaryDirectories.push(home);
@@ -94,7 +118,10 @@ describe('desktop CLI provider setup', () => {
   });
 
   it('keeps CLI installer commands on an explicit allowlist', () => {
-    expect(INSTALL_COMMANDS.claude).toBe('irm https://claude.ai/install.ps1 | iex');
+    expect(installCommandFor('claude', 'win32')).toBe('irm https://claude.ai/install.ps1 | iex');
+    expect(installCommandFor('codex', 'win32')).toBe('irm https://chatgpt.com/codex/install.ps1 | iex');
+    expect(installCommandFor('codex', 'linux')).toBe('curl -fsSL https://chatgpt.com/codex/install.sh | sh');
+    expect(installCommandFor('gemini', 'win32')).toBe('npm install -g @google/gemini-cli');
     expect(Object.keys(INSTALL_COMMANDS).sort()).toEqual(['claude', 'codex', 'gemini']);
   });
 });
