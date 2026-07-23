@@ -607,6 +607,9 @@ button { border: 0; }
 .cli-install-actions .text-button { padding: 0; }
 .cli-health-line { background: var(--accent-soft); border: 1px solid #cfe4db; border-radius: 7px; color: var(--accent); display: grid; font-size: 10px; gap: 7px; grid-column: 1 / -1; line-height: 1.45; margin: 8px 0 0; padding: 9px 10px; }
 .cli-health-line.warn { background: #fff9e8; border-color: #eadcaf; color: #7d651a; }
+.cli-health-line small { color: inherit; font-size: 10px; opacity: .82; overflow-wrap: anywhere; }
+.cli-health-line span.ok { color: var(--accent); font-weight: 800; }
+.cli-health-line span.warn { color: #7d651a; font-weight: 800; }
 .cli-health-line code { background: #fff; border: 1px solid currentColor; border-radius: 5px; color: inherit; font-family: var(--font-mono); font-size: 9px; opacity: .82; overflow-x: auto; padding: 6px; white-space: nowrap; }
 .cli-advanced-settings { border: 1px solid var(--line-soft); border-radius: 8px; margin-top: 12px; padding: 10px 12px 12px; }
 .cli-advanced-settings summary { color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }

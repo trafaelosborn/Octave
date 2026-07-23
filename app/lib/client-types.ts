@@ -308,6 +308,17 @@ export interface OctaveDesktopBridge {
     pathDirectory: string | null;
     repaired: boolean;
   }>;
+  validateCliProvider: (input: { command: string; preset: 'codex' | 'claude' | 'gemini' | 'custom'; model: string }) => Promise<{
+    installed: boolean;
+    path: string | null;
+    onPath: boolean;
+    needsPathRepair: boolean;
+    pathDirectory: string | null;
+    accountStatus: 'unknown' | 'ok' | 'warn' | 'error';
+    accountMessage: string;
+    modelStatus: 'unknown' | 'ok' | 'warn' | 'error';
+    modelMessage: string;
+  }>;
   pickWorkspace: () => Promise<string | null>;
   saveProviderSettings: (settings: DesktopProviderSettingsInput) => Promise<DesktopProviderSettings>;
 }

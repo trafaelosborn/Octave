@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkCliProvider, installCommandFor, parseShellWords, resolveExecutable } = require('../desktop/app/cli-provider-setup.cjs') as {
+const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkCliProvider, installCommandFor, parseShellWords, resolveExecutable, validateCliProvider } = require('../desktop/app/cli-provider-setup.cjs') as {
   INSTALL_COMMANDS: Record<string, Record<string, string>>;
   augmentPathEnvironment: (environment?: Record<string, string | undefined>) => Record<string, string>;
   buildPathWithDirectory: (entries: string[], directory: string) => string;
@@ -19,6 +19,11 @@ const { INSTALL_COMMANDS, augmentPathEnvironment, buildPathWithDirectory, checkC
   installCommandFor: (preset: string, platform?: string) => string;
   parseShellWords: (input: string) => string[];
   resolveExecutable: (command: string, environment?: Record<string, string | undefined>) => Promise<string | null>;
+  validateCliProvider: (input: { command: string; preset: string; model: string }, environment?: Record<string, string | undefined>) => Promise<{
+    installed: boolean;
+    accountStatus: string;
+    modelStatus: string;
+  }>;
 };
 
 const temporaryDirectories: string[] = [];
@@ -111,6 +116,18 @@ describe('desktop CLI provider setup', () => {
     const second = buildPathWithDirectory(first.split(path.delimiter), 'C:\\Users\\Clem\\.local\\bin');
 
     expect(second.split(path.delimiter).filter((entry) => entry.toLowerCase() === 'c:\\users\\clem\\.local\\bin')).toHaveLength(1);
+  });
+
+  it('reports account and model validation as unknown until the CLI is installed', async () => {
+    await expect(validateCliProvider({
+      command: 'definitely-not-installed-octave-cli',
+      preset: 'codex',
+      model: 'gpt-test',
+    }, { PATH: '', PATHEXT: '.EXE;.CMD;.BAT;.COM' })).resolves.toMatchObject({
+      installed: false,
+      accountStatus: 'unknown',
+      modelStatus: 'unknown',
+    });
   });
 
   it('parses setup arguments without invoking a shell parser', () => {

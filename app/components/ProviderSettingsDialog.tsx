@@ -18,6 +18,10 @@ type CliHealth = {
   onPath: boolean;
   needsPathRepair: boolean;
   pathDirectory: string | null;
+  accountStatus: 'unknown' | 'ok' | 'warn' | 'error';
+  accountMessage: string;
+  modelStatus: 'unknown' | 'ok' | 'warn' | 'error';
+  modelMessage: string;
 };
 type CliInstallStatus = Record<CliPresetId, CliHealth>;
 type PlatformId = 'openai' | 'anthropic' | 'xai' | 'gemini' | 'ollama' | 'demo';
@@ -326,6 +330,10 @@ export function ProviderSettingsDialog({
           onPath: Boolean(result?.onPath),
           needsPathRepair: Boolean(result?.needsPathRepair),
           pathDirectory: result?.pathDirectory ?? null,
+          accountStatus: 'unknown',
+          accountMessage: '',
+          modelStatus: 'unknown',
+          modelMessage: '',
         }] as const;
       } catch {
         return [preset.id, emptyCliHealth(true)] as const;
@@ -355,10 +363,21 @@ export function ProviderSettingsDialog({
           onPath: result.onPath,
           needsPathRepair: result.needsPathRepair,
           pathDirectory: result.pathDirectory,
+          accountStatus: 'unknown',
+          accountMessage: '',
+          modelStatus: 'unknown',
+          modelMessage: '',
         },
       }));
       setCliStatus(result.installed
-        ? cliHealthMessage(preset, { checked: true, ...result })
+        ? cliHealthMessage(preset, {
+          checked: true,
+          ...result,
+          accountStatus: 'unknown',
+          accountMessage: '',
+          modelStatus: 'unknown',
+          modelMessage: '',
+        })
         : missingCliMessage(preset));
       setCliStatusKind(result.installed ? 'ok' : 'warn');
       return result.installed;
@@ -437,12 +456,52 @@ export function ProviderSettingsDialog({
           onPath: result.onPath,
           needsPathRepair: result.needsPathRepair,
           pathDirectory: result.pathDirectory,
+          accountStatus: 'unknown',
+          accountMessage: '',
+          modelStatus: 'unknown',
+          modelMessage: '',
         },
       }));
       setCliStatus(result.repaired
         ? `${preset?.name ?? 'CLI'} install directory was added to your Windows user PATH. Restart terminals to pick it up.`
         : `${preset?.name ?? 'CLI'} is already on PATH.`);
       setCliStatusKind('ok');
+    } catch (error) {
+      setCliStatus(error instanceof Error ? error.message : String(error));
+      setCliStatusKind('error');
+    }
+  }
+
+  async function validateCli(presetId: CliPresetId = cliPresetId): Promise<void> {
+    if (!window.octaveDesktop) {
+      setCliStatus('Open the desktop app to validate CLI account and model access.');
+      setCliStatusKind('warn');
+      return;
+    }
+    const preset = CLI_PRESETS.find((candidate) => candidate.id === presetId);
+    const command = presetId === cliPresetId || preset?.id === 'custom' ? cliCommand : preset?.command ?? cliCommand;
+    setCliStatus('Validating account and model...');
+    setCliStatusKind('idle');
+    try {
+      const result = await window.octaveDesktop.validateCliProvider({ command, preset: presetId, model: models.cli });
+      setCliInstallStatus((current) => ({
+        ...current,
+        [presetId]: {
+          checked: true,
+          installed: result.installed,
+          path: result.path,
+          onPath: result.onPath,
+          needsPathRepair: result.needsPathRepair,
+          pathDirectory: result.pathDirectory,
+          accountStatus: result.accountStatus,
+          accountMessage: result.accountMessage,
+          modelStatus: result.modelStatus,
+          modelMessage: result.modelMessage,
+        },
+      }));
+      const ok = result.accountStatus === 'ok' && result.modelStatus === 'ok';
+      setCliStatus(ok ? `${preset?.name ?? 'CLI'} is ready to chat with ${models.cli}.` : result.modelMessage || result.accountMessage);
+      setCliStatusKind(ok ? 'ok' : 'warn');
     } catch (error) {
       setCliStatus(error instanceof Error ? error.message : String(error));
       setCliStatusKind('error');
@@ -580,6 +639,9 @@ export function ProviderSettingsDialog({
                       {preset && status.checked && status.installed && (
                         <p className={`cli-health-line ${status.needsPathRepair ? 'warn' : 'ok'}`}>
                           <span>{cliHealthMessage(preset, status)}</span>
+                          <span className={cliReadinessKind(status)}>{cliReadinessMessage(status)}</span>
+                          {status.accountMessage && <small>{status.accountMessage}</small>}
+                          {status.modelMessage && status.modelMessage !== status.accountMessage && <small>{status.modelMessage}</small>}
                           {status.path && <code>{status.path}</code>}
                         </p>
                       )}
@@ -601,6 +663,7 @@ export function ProviderSettingsDialog({
                   {cliInstallStatus[cliPresetId]?.needsPathRepair && (
                     <button className="button button-secondary" type="button" onClick={() => void repairCliPath()} disabled={saving || !cliCommand.trim()}>Repair PATH</button>
                   )}
+                  <button className="button button-secondary" type="button" onClick={() => void validateCli()} disabled={saving || !cliCommand.trim() || cliPresetId === 'custom'}>Validate model</button>
                   <button className="button button-primary" type="button" onClick={() => void launchCliSetup()} disabled={saving || !cliCommand.trim()}>Connect account</button>
                 </div>
               </div>
@@ -664,6 +727,10 @@ function emptyCliHealth(checked = false): CliHealth {
     onPath: false,
     needsPathRepair: false,
     pathDirectory: null,
+    accountStatus: 'unknown',
+    accountMessage: '',
+    modelStatus: 'unknown',
+    modelMessage: '',
   };
 }
 
@@ -674,6 +741,20 @@ function cliHealthMessage(preset: typeof CLI_PRESETS[number] | undefined, health
     return `${name} is installed, and Octave can use it, but its folder is not on your Windows PATH yet.`;
   }
   return `${name} is installed and available on PATH.`;
+}
+
+function cliReadinessMessage(health: CliHealth): string {
+  const account = health.accountStatus === 'ok'
+    ? 'Account ready'
+    : health.accountStatus === 'unknown' ? 'Account not checked' : 'Account needs attention';
+  const model = health.modelStatus === 'ok'
+    ? 'Model ready'
+    : health.modelStatus === 'unknown' ? 'Model not checked' : 'Model needs attention';
+  return `${account}. ${model}.`;
+}
+
+function cliReadinessKind(health: CliHealth): 'ok' | 'warn' {
+  return health.accountStatus === 'ok' && health.modelStatus === 'ok' ? 'ok' : 'warn';
 }
 
 function ModelSelect({

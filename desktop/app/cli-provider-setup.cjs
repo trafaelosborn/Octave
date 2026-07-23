@@ -51,6 +51,129 @@ async function checkCliProvider(command, environment = process.env) {
   };
 }
 
+async function validateCliProvider(input, environment = process.env) {
+  const command = input && typeof input === 'object' ? input.command : '';
+  const preset = input && typeof input === 'object' ? String(input.preset ?? '') : '';
+  const model = input && typeof input === 'object' ? String(input.model ?? '').trim() : '';
+  const health = await checkCliProvider(command, environment);
+  if (!health.installed || !health.path) {
+    return {
+      ...health,
+      accountStatus: 'unknown',
+      accountMessage: 'Install the CLI before validating the account.',
+      modelStatus: 'unknown',
+      modelMessage: 'Install the CLI before validating a model.',
+    };
+  }
+
+  if (preset === 'codex') return validateCodexCli(health.path, model, environment, health);
+  if (preset === 'claude') return validatePromptCli(health.path, ['-p', '--model', model || 'sonnet', 'Reply with OK only.'], environment, health, 'Claude Code');
+  if (preset === 'gemini') return validatePromptCli(health.path, ['-m', model || 'gemini-2.5-pro', '-p', 'Reply with OK only.'], environment, health, 'Gemini CLI');
+  return {
+    ...health,
+    accountStatus: 'unknown',
+    accountMessage: 'Custom CLI account validation is not available.',
+    modelStatus: 'unknown',
+    modelMessage: 'Custom CLI model validation is not available.',
+  };
+}
+
+async function validateCodexCli(executable, model, environment, health) {
+  const probe = await runCliProbe(executable, ['doctor', '--json'], environment, 20_000);
+  const parsed = parseJsonObject(probe.stdout);
+  const auth = parsed?.checks?.['auth.credentials'];
+  const authOk = auth?.status === 'ok';
+  const accountStatus = authOk ? 'ok' : 'error';
+  const accountMessage = typeof auth?.summary === 'string'
+    ? auth.summary
+    : accountStatus === 'ok' ? 'Codex authentication is configured.' : 'Codex authentication was not confirmed.';
+  if (!authOk) {
+    return {
+      ...health,
+      accountStatus,
+      accountMessage,
+      modelStatus: 'unknown',
+      modelMessage: 'Sign into Codex before validating a model.',
+    };
+  }
+  if (!model) {
+    return {
+      ...health,
+      accountStatus,
+      accountMessage,
+      modelStatus: 'unknown',
+      modelMessage: 'Choose a model to validate.',
+    };
+  }
+  const modelProbe = await runCliProbe(executable, ['exec', '--model', model, '-'], environment, 20_000, 'Reply with OK only.');
+  return {
+    ...health,
+    accountStatus,
+    accountMessage,
+    modelStatus: modelProbe.code === 0 && modelProbe.stdout.trim() ? 'ok' : 'error',
+    modelMessage: modelProbe.code === 0
+      ? `${model} responded through Codex CLI.`
+      : summarizeProbeFailure(modelProbe, `${model} did not validate through Codex CLI.`),
+  };
+}
+
+async function validatePromptCli(executable, args, environment, health, name) {
+  const probe = await runCliProbe(executable, args, environment, 20_000);
+  const ok = probe.code === 0 && probe.stdout.trim();
+  const message = ok
+    ? `${name} account and selected model responded.`
+    : summarizeProbeFailure(probe, `${name} did not validate. Connect your account or choose another model.`);
+  return {
+    ...health,
+    accountStatus: ok ? 'ok' : 'error',
+    accountMessage: message,
+    modelStatus: ok ? 'ok' : 'error',
+    modelMessage: message,
+  };
+}
+
+async function runCliProbe(executable, args, environment, timeoutMs, stdin = '') {
+  return new Promise((resolve) => {
+    const child = spawn(executable, args, {
+      cwd: process.cwd(),
+      env: augmentPathEnvironment(environment),
+      shell: false,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      resolve({ code: null, timedOut: true, stdout, stderr });
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      stdout = `${stdout}${chunk}`.slice(-16_000);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-16_000);
+    });
+    child.once('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code: null, timedOut: false, stdout, stderr: error.message });
+    });
+    child.once('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ code, timedOut: false, stdout, stderr });
+    });
+    child.stdin.end(stdin);
+  });
+}
+
 async function repairCliProviderPath(command, environment = process.env) {
   const health = await checkCliProvider(command, environment);
   if (!health.installed || !health.pathDirectory) {
@@ -204,6 +327,29 @@ function parseShellWords(input) {
   return words;
 }
 
+function parseJsonObject(input) {
+  const text = String(input ?? '').trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function summarizeProbeFailure(probe, fallback) {
+  if (probe.timedOut) return `${fallback} The validation timed out.`;
+  const detail = (probe.stderr || probe.stdout || '').trim().replace(/\s+/g, ' ').slice(0, 500);
+  return detail ? `${fallback} ${detail}` : fallback;
+}
+
 function normalizeCommand(command) {
   if (typeof command !== 'string') return '';
   const normalized = command.trim();
@@ -315,4 +461,5 @@ module.exports = {
   parseShellWords,
   repairCliProviderPath,
   resolveExecutable,
+  validateCliProvider,
 };
