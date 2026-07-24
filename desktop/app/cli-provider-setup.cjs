@@ -39,7 +39,7 @@ async function resolveExecutable(command, environment = process.env) {
 }
 
 async function checkCliProvider(command, environment = process.env) {
-  const onPath = await resolveExecutableFromPath(command, environment, environment);
+  const onPath = await resolveExecutableOnEffectivePath(command, environment);
   const resolvedPath = onPath ?? await resolveExecutable(command, environment);
   const pathDirectory = resolvedPath ? path.dirname(resolvedPath) : null;
   return {
@@ -49,6 +49,19 @@ async function checkCliProvider(command, environment = process.env) {
     needsPathRepair: Boolean(resolvedPath && !onPath),
     pathDirectory,
   };
+}
+
+async function resolveExecutableOnEffectivePath(command, environment = process.env) {
+  const onProcessPath = await resolveExecutableFromPath(command, environment, environment);
+  if (onProcessPath) return onProcessPath;
+  if (process.platform !== 'win32' || environment !== process.env) return null;
+  const userPath = await readWindowsUserPath(environment);
+  if (!userPath) return null;
+  return resolveExecutableFromPath(command, {
+    ...environment,
+    PATH: buildPathWithDirectory(pathEntries({ PATH: userPath }), ''),
+    Path: buildPathWithDirectory(pathEntries({ PATH: userPath }), ''),
+  }, environment);
 }
 
 async function validateCliProvider(input, environment = process.env) {
@@ -219,31 +232,92 @@ async function addDirectoryToUserPath(directory, environment = process.env) {
     throw new Error('Automatic user PATH repair is currently supported only on Windows.');
   }
   await new Promise((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
     const child = spawn('powershell.exe', [
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      [
-        '$directory = $args[0]',
-        '$current = [Environment]::GetEnvironmentVariable("Path", "User")',
-        '$entries = @()',
-        'if ($current) { $entries = $current -split [IO.Path]::PathSeparator | Where-Object { $_ } }',
-        '$exists = $entries | Where-Object { $_.TrimEnd("\\", "/").ToLowerInvariant() -eq $directory.TrimEnd("\\", "/").ToLowerInvariant() }',
-        'if (-not $exists) { $entries += $directory }',
-        '[Environment]::SetEnvironmentVariable("Path", ($entries -join [IO.Path]::PathSeparator), "User")',
-      ].join('; '),
+      buildUserPathRepairCommand(),
       normalized,
-    ], { stdio: 'ignore', windowsHide: true, env: environment });
+    ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: environment });
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      stdout = `${stdout}${chunk}`.slice(-4_000);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-4_000);
+    });
     child.once('error', reject);
     child.once('exit', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`PATH repair exited with code ${code ?? 'unknown'}.`));
+      else reject(new Error(summarizePathRepairFailure(code, stdout, stderr)));
     });
   });
   const nextProcessPath = buildPathWithDirectory(pathEntries(environment), normalized);
   process.env.PATH = nextProcessPath;
   process.env.Path = nextProcessPath;
+}
+
+function buildUserPathRepairCommand() {
+  return [
+    '& {',
+    'param([string] $directory)',
+    "$ErrorActionPreference = 'Stop'",
+    "if ([string]::IsNullOrWhiteSpace($directory)) { throw 'Cannot repair PATH without an install directory.' }",
+    "$trimChars = [char[]]@('\\', '/')",
+    '$directory = $directory.Trim().TrimEnd($trimChars)',
+    '$current = [Environment]::GetEnvironmentVariable("Path", "User")',
+    '$entries = @()',
+    'if (-not [string]::IsNullOrWhiteSpace($current)) {',
+    '  $entries = $current -split [IO.Path]::PathSeparator | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }',
+    '}',
+    '$directoryKey = $directory.TrimEnd($trimChars).ToLowerInvariant()',
+    '$exists = $false',
+    'foreach ($entry in $entries) {',
+    '  if ($entry.TrimEnd($trimChars).ToLowerInvariant() -eq $directoryKey) { $exists = $true; break }',
+    '}',
+    'if (-not $exists) {',
+    '  $entries += $directory',
+    '  [Environment]::SetEnvironmentVariable("Path", ($entries -join [IO.Path]::PathSeparator), "User")',
+    '  try {',
+    "    $signature = '[DllImport(\"user32.dll\", SetLastError=true, CharSet=CharSet.Auto)] public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);'",
+    "    $type = Add-Type -MemberDefinition $signature -Name NativeMethods -Namespace OctavePathRepair -PassThru",
+    '    $result = [UIntPtr]::Zero',
+    "    [void] $type::SendMessageTimeout([IntPtr] 0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 0x0002, 5000, [ref] $result)",
+    '  } catch { }',
+    '}',
+    '}',
+  ].join('\n');
+}
+
+async function readWindowsUserPath(environment = process.env) {
+  return new Promise((resolve) => {
+    const child = spawn('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      '[Environment]::GetEnvironmentVariable("Path", "User")',
+    ], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, env: environment });
+    let stdout = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      stdout = `${stdout}${chunk}`.slice(-16_000);
+    });
+    child.once('error', () => resolve(''));
+    child.once('exit', (code) => {
+      resolve(code === 0 ? stdout.trim() : '');
+    });
+  });
+}
+
+function summarizePathRepairFailure(code, stdout, stderr) {
+  const detail = (stderr || stdout || '').trim().replace(/\s+/g, ' ').slice(0, 500);
+  const suffix = detail ? ` ${detail}` : '';
+  return `PATH repair exited with code ${code ?? 'unknown'}.${suffix}`;
 }
 
 async function launchCliSetup({ command, args }) {
