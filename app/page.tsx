@@ -260,8 +260,14 @@ export default function OctavePage() {
     if (!window.octaveDesktop) throw new Error('Provider settings are available only in the desktop app.');
     setSavingProviderSettings(true);
     try {
+      const wasFirstRun = Boolean(desktopProviderSettings?.firstRun);
       const settings = await window.octaveDesktop.saveProviderSettings(input);
       setDesktopProviderSettings(settings);
+      if (wasFirstRun && !activeWorkspaceId) {
+        setRailView('files');
+        setRailOpen(true);
+        setWorkspaceFormOpen(true);
+      }
     } catch (problem) {
       setSavingProviderSettings(false);
       throw problem;
@@ -1106,6 +1112,7 @@ export default function OctavePage() {
           open={providerSettingsOpen}
           settings={desktopProviderSettings}
           saving={savingProviderSettings}
+          workspaceReady={Boolean(activeWorkspaceId || workspaces.length)}
           onClose={() => setProviderSettingsOpen(false)}
           onSave={saveDesktopProviderSettings}
         />

@@ -199,12 +199,14 @@ export function ProviderSettingsDialog({
   open,
   settings,
   saving,
+  workspaceReady = false,
   onClose,
   onSave,
 }: {
   open: boolean;
   settings: DesktopProviderSettings;
   saving: boolean;
+  workspaceReady?: boolean;
   onClose: () => void;
   onSave: (input: DesktopProviderSettingsInput) => Promise<void>;
 }) {
@@ -252,6 +254,23 @@ export function ProviderSettingsDialog({
 
   if (!open) return null;
 
+  const selectedCliPreset = CLI_PRESETS.find((candidate) => candidate.id === cliPresetId);
+  const selectedCliHealth = cliInstallStatus[cliPresetId] ?? emptyCliHealth();
+  const setupSteps = buildSetupSteps({
+    activeCloudProvider,
+    activePlatform,
+    connectionMode,
+    credentials,
+    models,
+    selectedCliHealth,
+    selectedCliPreset,
+    settings,
+    workspaceReady,
+  });
+  const setupReadiness = setupSteps.every((step) => step.kind === 'done')
+    ? 'Octave is ready. Save, then open your research folder.'
+    : 'You can save and finish any warnings later. Validation just prevents surprise provider errors.';
+
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setProblem('');
@@ -284,6 +303,12 @@ export function ProviderSettingsDialog({
 
   function chooseConnectionMode(mode: ConnectionMode): void {
     applyPlatformConnection(findPlatform(platformId), mode);
+  }
+
+  function choosePlatformMode(value: PlatformId, mode: ConnectionMode): void {
+    const platform = findPlatform(value);
+    setPlatformId(platform.id);
+    applyPlatformConnection(platform, mode);
   }
 
   function applyPlatformConnection(platform: PlatformOption, mode: ConnectionMode): void {
@@ -528,6 +553,42 @@ export function ProviderSettingsDialog({
 
         <form onSubmit={(event) => void submit(event)}>
           <div className="settings-scroll">
+            {settings.firstRun && (
+              <section className="settings-section setup-overview">
+                <div className="settings-section-heading">
+                  <div>
+                    <h3>Quick start</h3>
+                    <p>Pick a platform, choose CLI login or API key, confirm the account/model, then open a workspace.</p>
+                  </div>
+                </div>
+                <div className="quick-start-grid">
+                  <button className="quick-start-card" type="button" onClick={() => choosePlatformMode('anthropic', 'cli')}>
+                    <strong>Start with Claude Code</strong>
+                    <span>Use your Claude account through the installed CLI.</span>
+                  </button>
+                  <button className="quick-start-card" type="button" onClick={() => choosePlatformMode('openai', 'cli')}>
+                    <strong>Use Codex CLI</strong>
+                    <span>Sign in with OpenAI and keep API keys out of Octave.</span>
+                  </button>
+                  <button className="quick-start-card" type="button" onClick={() => choosePlatformMode('demo', 'demo')}>
+                    <strong>Skip for now</strong>
+                    <span>Open Octave in offline demo mode and connect AI later.</span>
+                  </button>
+                </div>
+                <ol className="setup-checklist" aria-label="Octave setup checklist">
+                  {setupSteps.map((step) => (
+                    <li className={`setup-step ${step.kind}`} key={step.label}>
+                      <span>{step.kind === 'done' ? '✓' : step.kind === 'warn' ? '!' : '•'}</span>
+                      <div>
+                        <strong>{step.label}</strong>
+                        <small>{step.detail}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
             <section className="settings-section">
               <div className="settings-section-heading"><div><h3>Choose platform</h3><p>Select the AI account or local runtime Octave should use by default.</p></div></div>
               <div className="platform-grid">
@@ -692,11 +753,11 @@ export function ProviderSettingsDialog({
           </div>
 
           <footer className="settings-footer">
-            <p>Keys and local provider settings are passed only to Octave's private local server. Saved API keys are encrypted through your operating system account.</p>
+            <p>{settings.firstRun ? setupReadiness : "Keys and local provider settings are passed only to Octave's private local server. Saved API keys are encrypted through your operating system account."}</p>
             <div>
               {!settings.firstRun && <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancel</button>}
               <button className="button button-primary" type="submit" disabled={saving}>
-                {saving ? 'Saving and restarting...' : settings.firstRun ? 'Save and open Octave' : 'Save and restart'}
+                {saving ? (settings.firstRun ? 'Opening Octave...' : 'Saving and restarting...') : settings.firstRun ? 'Save and open Octave' : 'Save and restart'}
               </button>
             </div>
           </footer>
@@ -717,6 +778,112 @@ function credentialPlaceholder(source: DesktopProviderSettings['credentialSource
   if (source === 'saved') return 'Saved securely';
   if (source === 'environment') return 'Using environment configuration';
   return 'Paste a new key';
+}
+
+type SetupStep = { label: string; detail: string; kind: 'done' | 'pending' | 'warn' };
+
+function buildSetupSteps({
+  activeCloudProvider,
+  activePlatform,
+  connectionMode,
+  credentials,
+  models,
+  selectedCliHealth,
+  selectedCliPreset,
+  settings,
+  workspaceReady,
+}: {
+  activeCloudProvider: typeof CLOUD_PROVIDERS[number] | undefined;
+  activePlatform: PlatformOption;
+  connectionMode: ConnectionMode;
+  credentials: DesktopProviderSettingsInput['credentials'];
+  models: DesktopProviderSettings['models'];
+  selectedCliHealth: CliHealth;
+  selectedCliPreset: typeof CLI_PRESETS[number] | undefined;
+  settings: DesktopProviderSettings;
+  workspaceReady: boolean;
+}): SetupStep[] {
+  const providerName = activePlatform.name;
+  const steps: SetupStep[] = [
+    {
+      label: 'AI platform',
+      detail: `${providerName} selected with ${connectionModeLabel(connectionMode).toLowerCase()}.`,
+      kind: 'done',
+    },
+  ];
+
+  if (connectionMode === 'api') {
+    const cloudProvider = activeCloudProvider;
+    const credentialChange = cloudProvider ? credentials[cloudProvider.id] : undefined;
+    const hasCredential = Boolean(cloudProvider && (
+      settings.credentialSources[cloudProvider.id] === 'saved'
+      || settings.credentialSources[cloudProvider.id] === 'environment'
+      || (typeof credentialChange === 'string' && credentialChange.trim())
+    ));
+    steps.push({
+      label: 'API key',
+      detail: !settings.encryptionAvailable
+        ? 'OS keychain encryption is unavailable, so Octave cannot save API keys yet.'
+        : hasCredential ? `${cloudProvider?.name ?? providerName} key is ready.` : `Paste a ${cloudProvider?.name ?? providerName} key or switch to CLI login.`,
+      kind: !settings.encryptionAvailable ? 'warn' : hasCredential ? 'done' : 'pending',
+    });
+    steps.push({
+      label: 'Frontier model',
+      detail: `${models[cloudProvider?.id ?? 'openai'] || activePlatform.frontierModel} selected by default.`,
+      kind: 'done',
+    });
+  }
+
+  if (connectionMode === 'cli') {
+    const cliName = selectedCliPreset?.name ?? 'Command-line AI';
+    steps.push({
+      label: 'CLI installed',
+      detail: !selectedCliHealth.checked
+        ? `Checking for ${cliName}...`
+        : selectedCliHealth.installed
+          ? selectedCliHealth.needsPathRepair ? `${cliName} is installed; use Repair PATH for terminal parity.` : `${cliName} is installed.`
+          : `${cliName} was not found. Use Open installer or choose API key.`,
+      kind: !selectedCliHealth.checked ? 'pending' : selectedCliHealth.installed ? (selectedCliHealth.needsPathRepair ? 'warn' : 'done') : 'warn',
+    });
+    steps.push({
+      label: 'Account connected',
+      detail: selectedCliHealth.accountStatus === 'ok'
+        ? selectedCliHealth.accountMessage || `${selectedCliPreset?.account ?? 'CLI'} account is signed in.`
+        : selectedCliHealth.accountStatus === 'unknown' ? 'Click Connect account, then Validate model.' : selectedCliHealth.accountMessage || 'The CLI account needs attention.',
+      kind: selectedCliHealth.accountStatus === 'ok' ? 'done' : selectedCliHealth.accountStatus === 'unknown' ? 'pending' : 'warn',
+    });
+    steps.push({
+      label: 'Model validated',
+      detail: selectedCliHealth.modelStatus === 'ok'
+        ? selectedCliHealth.modelMessage || `${models.cli || selectedCliPreset?.model || activePlatform.frontierModel} is available.`
+        : selectedCliHealth.modelStatus === 'unknown' ? 'Click Validate model to confirm access before chatting.' : selectedCliHealth.modelMessage || 'This model may not exist or may not be available on the account.',
+      kind: selectedCliHealth.modelStatus === 'ok' ? 'done' : selectedCliHealth.modelStatus === 'unknown' ? 'pending' : 'warn',
+    });
+  }
+
+  if (connectionMode === 'local') {
+    steps.push({
+      label: 'Local runtime',
+      detail: `Octave will use Ollama at ${settings.ollamaBaseUrl || 'the default local URL'}.`,
+      kind: 'pending',
+    });
+  }
+
+  if (connectionMode === 'demo') {
+    steps.push({
+      label: 'Offline mode',
+      detail: 'No account needed. Responses use the built-in demo provider until you connect AI.',
+      kind: 'done',
+    });
+  }
+
+  steps.push({
+    label: 'Workspace',
+    detail: workspaceReady ? 'A research folder is ready.' : 'After saving, Octave will guide you to choose a project folder.',
+    kind: workspaceReady ? 'done' : 'pending',
+  });
+
+  return steps;
 }
 
 function emptyCliHealth(checked = false): CliHealth {
