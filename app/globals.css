@@ -231,12 +231,13 @@ button { border: 0; }
 .citation-metrics .warning, .citation-source-metrics .warning { background: #4a3029; color: #ffc6a8; }
 .citation-setup-note { background: #293b36; border: 1px solid #3c514b; border-radius: 6px; color: #b6c8c2; font-size: 9px; line-height: 1.5; margin: 0; padding: 8px; }
 .citation-setup-note code { color: #e1c485; }
-.citation-audit-summary { background: #263b35; border: 1px solid #39564e; border-radius: 7px; display: grid; gap: 6px; padding: 9px; }
-.citation-audit-summary > div { display: grid; gap: 2px; }
-.citation-audit-summary strong { color: var(--rail-text); font-size: 10px; }
-.citation-audit-summary span, .citation-audit-summary small { color: var(--rail-muted); font-size: 8px; }
-.citation-audit-summary small { color: #e0ad72; }
-.citation-audit-summary button { background: transparent; color: #dcc07f; font-size: 9px; padding: 0; text-align: left; }
+.citation-audit-summary, .citation-check-summary { background: #263b35; border: 1px solid #39564e; border-radius: 7px; display: grid; gap: 6px; padding: 9px; }
+.citation-check-summary { border-color: #59694f; }
+.citation-audit-summary > div, .citation-check-summary > div { display: grid; gap: 2px; }
+.citation-audit-summary strong, .citation-check-summary strong { color: var(--rail-text); font-size: 10px; }
+.citation-audit-summary span, .citation-audit-summary small, .citation-check-summary span, .citation-check-summary small { color: var(--rail-muted); font-size: 8px; }
+.citation-audit-summary small, .citation-check-summary small { color: #e0ad72; }
+.citation-audit-summary button, .citation-check-summary button { background: transparent; color: #dcc07f; font-size: 9px; padding: 0; text-align: left; }
 .citation-source-list { display: grid; gap: 6px; }
 .citation-source { background: var(--rail-raised); border-left: 2px solid #687b75; border-radius: 6px; display: grid; gap: 5px; padding: 8px; }
 .citation-source.citation-status-downloaded { border-left-color: #58a98e; }

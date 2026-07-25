@@ -1,12 +1,13 @@
 import {
   buildCitationCorpusIndex,
+  isCitationCheckStale,
   isCitationAuditStale,
   inspectCitationWorkspace,
   summarizeCitationSources,
   type CitationSourceRecord,
   type CitationSourceStatus,
 } from '@trafaelosborn/octave/core';
-import { loadCitationAudit, loadCitationIndex } from '@trafaelosborn/octave/storage';
+import { loadCitationAudit, loadCitationCheck, loadCitationIndex } from '@trafaelosborn/octave/storage';
 
 export interface CitationAuditOverview {
   generatedAt: string;
@@ -37,6 +38,7 @@ export interface CitationScan {
   sourceSummary: Record<CitationSourceStatus, number>;
   unpaywallConfigured: boolean;
   audit: CitationAuditOverview | null;
+  check: CitationCheckOverview | null;
   summary: {
     cited: number;
     bibliography: number;
@@ -45,14 +47,32 @@ export interface CitationScan {
   };
 }
 
+export interface CitationCheckOverview {
+  generatedAt: string;
+  path: string;
+  markdownPath: string;
+  stale: boolean;
+  summary: {
+    claims: number;
+    likelySupported: number;
+    weakMatch: number;
+    noCandidatePassage: number;
+    sourceUnavailable: number;
+    bibliographyMissing: number;
+    warnings: number;
+    errors: number;
+  };
+}
+
 export async function scanCitations(
   workspaceRoot: string,
   options: { unpaywallConfigured?: boolean } = {},
 ): Promise<CitationScan> {
   const inventory = await inspectCitationWorkspace(workspaceRoot);
-  const [existing, audit] = await Promise.all([
+  const [existing, audit, check] = await Promise.all([
     loadCitationIndex(workspaceRoot),
     loadCitationAudit(workspaceRoot),
+    loadCitationCheck(workspaceRoot),
   ]);
   const corpus = buildCitationCorpusIndex(inventory, existing);
   const cited = new Map<string, CitationIssue>();
@@ -91,6 +111,22 @@ export async function scanCitations(
           unavailable: packets.filter((packet) => packet.status === 'source_unavailable').length,
         }];
       })),
+    } : null,
+    check: check ? {
+      generatedAt: check.generatedAt,
+      path: check.artifacts.json,
+      markdownPath: check.artifacts.markdown,
+      stale: isCitationCheckStale(check, audit, corpus, inventory),
+      summary: {
+        claims: check.summary.claims,
+        likelySupported: check.summary.likely_supported,
+        weakMatch: check.summary.weak_match,
+        noCandidatePassage: check.summary.no_candidate_passage,
+        sourceUnavailable: check.summary.source_unavailable,
+        bibliographyMissing: check.summary.bibliography_missing,
+        warnings: check.summary.warnings,
+        errors: check.summary.errors,
+      },
     } : null,
     summary: {
       cited: citedKeys.length,

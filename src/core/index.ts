@@ -4,6 +4,7 @@ export * from './bibtex.js';
 export * from './citation-corpus.js';
 export * from './citation-acquisition.js';
 export * from './citation-evidence.js';
+export * from './citation-check.js';
 export * from './compile.js';
 export * from './context.js';
 export * from './extract.js';

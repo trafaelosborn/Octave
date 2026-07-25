@@ -42,6 +42,7 @@ export function WorkspaceRail({
   outline,
   citations,
   syncingCitations,
+  checkingCitations,
   newDocumentPath,
   onClose,
   onRailView,
@@ -68,6 +69,7 @@ export function WorkspaceRail({
   onOutlineItem,
   onRefreshCitations,
   onSyncCitations,
+  onCheckCitations,
   onOpenCitationSource,
   onNewDocumentPath,
   onCreateDocument,
@@ -93,6 +95,7 @@ export function WorkspaceRail({
   outline: OutlineItem[];
   citations: CitationScan | null;
   syncingCitations: boolean;
+  checkingCitations: boolean;
   newDocumentPath: string;
   onClose: () => void;
   onRailView: (view: RailView) => void;
@@ -119,6 +122,7 @@ export function WorkspaceRail({
   onOutlineItem: (item: OutlineItem) => void;
   onRefreshCitations: () => void;
   onSyncCitations: () => void;
+  onCheckCitations: () => void;
   onOpenCitationSource: (path: string) => void;
   onNewDocumentPath: (value: string) => void;
   onCreateDocument: () => void;
@@ -283,8 +287,9 @@ export function WorkspaceRail({
               <div className="section-heading">
                 <span>Citation sources</span>
                 <div className="section-actions">
-                  <button className="text-button" onClick={onRefreshCitations} disabled={syncingCitations}>Refresh</button>
-                  <button className="text-button" onClick={onSyncCitations} disabled={syncingCitations}>{syncingCitations ? 'Fetching...' : 'Fetch sources'}</button>
+                  <button className="text-button" onClick={onRefreshCitations} disabled={syncingCitations || checkingCitations}>Refresh</button>
+                  <button className="text-button" onClick={onCheckCitations} disabled={syncingCitations || checkingCitations || !citations?.audit}>{checkingCitations ? 'Checking...' : 'Check'}</button>
+                  <button className="text-button" onClick={onSyncCitations} disabled={syncingCitations || checkingCitations}>{syncingCitations ? 'Fetching...' : 'Fetch sources'}</button>
                 </div>
               </div>
               {citations ? (
@@ -309,6 +314,16 @@ export function WorkspaceRail({
                       </div>
                       {citations.audit.stale && <small>Stale — fetch sources again</small>}
                       <button onClick={() => onOpenCitationSource(citations.audit!.path)}>Open machine-readable audit</button>
+                    </div>
+                  )}
+                  {citations.check && (
+                    <div className="citation-check-summary">
+                      <div>
+                        <strong>Citation check</strong>
+                        <span>{citations.check.summary.likelySupported}/{citations.check.summary.claims} likely supported · {citations.check.summary.warnings} warnings · {citations.check.summary.errors} errors</span>
+                      </div>
+                      {citations.check.stale && <small>Stale — run Check again</small>}
+                      <button onClick={() => onOpenCitationSource(citations.check!.markdownPath)}>Open check report</button>
                     </div>
                   )}
                   {!citations.unpaywallConfigured && citations.sources.some((source) => source.identifiers.doi) && (

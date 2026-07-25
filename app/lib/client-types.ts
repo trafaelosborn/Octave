@@ -101,6 +101,22 @@ export interface CitationScan {
     };
     byCitation: Record<string, { claims: number; evidenceFound: number; unavailable: number }>;
   } | null;
+  check: {
+    generatedAt: string;
+    path: string;
+    markdownPath: string;
+    stale: boolean;
+    summary: {
+      claims: number;
+      likelySupported: number;
+      weakMatch: number;
+      noCandidatePassage: number;
+      sourceUnavailable: number;
+      bibliographyMissing: number;
+      warnings: number;
+      errors: number;
+    };
+  } | null;
   summary: {
     cited: number;
     bibliography: number;

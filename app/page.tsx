@@ -106,6 +106,7 @@ export default function OctavePage() {
   const [deletingReview, setDeletingReview] = useState(false);
   const [searching, setSearching] = useState(false);
   const [syncingCitations, setSyncingCitations] = useState(false);
+  const [checkingCitations, setCheckingCitations] = useState(false);
   const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
   const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [savingProviderSettings, setSavingProviderSettings] = useState(false);
@@ -461,7 +462,7 @@ export default function OctavePage() {
   }
 
   async function syncCitationSources(): Promise<void> {
-    if (!activeWorkspaceId || syncingCitations) return;
+    if (!activeWorkspaceId || syncingCitations || checkingCitations) return;
     setSyncingCitations(true);
     try {
       const scan = await apiJson<CitationScan>('/api/citations', {
@@ -474,6 +475,23 @@ export default function OctavePage() {
       setError('');
     } finally {
       setSyncingCitations(false);
+    }
+  }
+
+  async function checkCitations(): Promise<void> {
+    if (!activeWorkspaceId || syncingCitations || checkingCitations) return;
+    setCheckingCitations(true);
+    try {
+      const scan = await apiJson<CitationScan>('/api/citations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, action: 'check' }),
+      });
+      setCitations(scan);
+      await refreshFiles();
+      setError('');
+    } finally {
+      setCheckingCitations(false);
     }
   }
 
@@ -892,6 +910,7 @@ export default function OctavePage() {
         outline={outline}
         citations={citations}
         syncingCitations={syncingCitations}
+        checkingCitations={checkingCitations}
         newDocumentPath={newDocumentPath}
         onClose={() => setRailOpen(false)}
         onRailView={setRailView}
@@ -918,6 +937,7 @@ export default function OctavePage() {
         onOutlineItem={openOutlineItem}
         onRefreshCitations={guard(refreshCitations)}
         onSyncCitations={guard(syncCitationSources)}
+        onCheckCitations={guard(checkCitations)}
         onOpenCitationSource={(path) => loadDocument(path).catch(showError)}
         onNewDocumentPath={setNewDocumentPath}
         onCreateDocument={guard(createDocument)}

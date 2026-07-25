@@ -6,6 +6,7 @@ import {
   type CitationSourceRecord,
 } from '../core/citation-corpus.js';
 import type { CitationEvidenceAudit } from '../core/citation-evidence.js';
+import type { CitationCheckReport } from '../core/citation-check.js';
 
 const CITATIONS_DIRECTORY = 'citations';
 
@@ -63,6 +64,31 @@ export async function saveCitationAudit(workspaceRoot: string, audit: CitationEv
   await writeJsonAtomic(path.join(await ensureCitationDirectory(workspaceRoot), 'audit.json'), audit);
 }
 
+export async function loadCitationCheck(workspaceRoot: string): Promise<CitationCheckReport | null> {
+  try {
+    const raw = await fs.readFile(path.join(path.resolve(workspaceRoot), CITATIONS_DIRECTORY, 'check.json'), 'utf8');
+    const parsed = JSON.parse(raw) as Partial<CitationCheckReport>;
+    return parsed.version === 1 && parsed.summary && Array.isArray(parsed.findings)
+      ? parsed as CitationCheckReport
+      : null;
+  } catch (error) {
+    if (isMissingFileError(error) || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+export async function saveCitationCheck(
+  workspaceRoot: string,
+  report: CitationCheckReport,
+  markdown: string,
+): Promise<void> {
+  const directory = await ensureCitationDirectory(workspaceRoot);
+  await Promise.all([
+    writeJsonAtomic(path.join(directory, 'check.json'), report),
+    writeTextAtomic(path.join(directory, 'check.md'), markdown),
+  ]);
+}
+
 export function resolveCitationArtifactPath(workspaceRoot: string, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
   if (!normalized.startsWith('citations/')) throw new Error('Citation artifacts must stay inside the citations directory.');
@@ -80,6 +106,12 @@ function isCitationCorpusIndex(value: unknown): value is CitationCorpusIndex {
 async function writeJsonAtomic(destination: string, value: unknown): Promise<void> {
   const temporary = `${destination}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await fs.rename(temporary, destination);
+}
+
+async function writeTextAtomic(destination: string, value: string): Promise<void> {
+  const temporary = `${destination}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(temporary, value, 'utf8');
   await fs.rename(temporary, destination);
 }
 
