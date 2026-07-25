@@ -17,7 +17,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Streams responses from local Ollama models, command-line AI tools, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
 - Compiles LaTeX with pdfLaTeX, LuaLaTeX, or Tectonic and keeps the PDF visible beside the source.
-- Audits citation keys, retrieves legitimate open full text when available, and builds a source-bound evidence corpus under `citations/`.
+- Audits citation keys, retrieves legitimate open full text when available, builds a source-bound evidence corpus under `citations/`, and generates citation-check reports in JSON and Markdown.
 - Preflights a paper for submission and builds a bounded upload bundle with portal metadata, PDF, TeX dependencies, supplements, reports, and checksums.
 - Searches the workspace, extracts a LaTeX outline, and runs Python or R files into a bounded process log.
 - Constrains file targets for reads, writes, context loading, compilation, and execution to the selected workspace.
@@ -70,7 +70,7 @@ The desktop shell starts Octave's server privately on a random loopback port and
 
 Workspace registrations live in `~/.octave/workspaces.json`. Per-project chats, saved review memos, and pinned-context state live under the selected folder's `.octave/` directory.
 
-To enable DOI open-access discovery, set `OCTAVE_SCHOLARLY_EMAIL` to a real contact address. Citation retrieval remains an explicit **Fetch sources** action; Octave never bypasses publisher access controls. Closed or unresolved papers are placed in a manual queue.
+To enable DOI open-access discovery, set `OCTAVE_SCHOLARLY_EMAIL` to a real contact address. Citation retrieval remains an explicit **Fetch sources** action; Octave never bypasses publisher access controls. Closed or unresolved papers are placed in a manual queue. Fetching sources also builds `citations/audit.json`, `citations/check.json`, and `citations/check.md`; the **Check** action can refresh the report later without refetching remote papers.
 
 ## Model providers
 
@@ -83,7 +83,7 @@ Octave discovers providers at startup:
 - **OpenAI:** available when `OPENAI_API_KEY` is set.
 - **xAI / Grok:** available when `XAI_API_KEY` is set.
 
-The Electron app opens provider setup on first run. It can save OpenAI, xAI, and Anthropic keys with operating-system-backed encryption, configure Ollama, choose and sign into a command-line AI tool, and choose default models without exposing saved keys back to the renderer. Use the settings button beside the AI picker to change them later; Octave restarts its private server to apply changes.
+The Electron app opens provider setup on first run. It can save OpenAI, xAI, and Anthropic keys with operating-system-backed encryption, configure Ollama, choose and sign into a command-line AI tool, install supported CLI tools, repair Windows user PATH entries, validate account/model access, and choose default models without exposing saved keys back to the renderer. Use the settings button beside the AI picker to change them later; Octave restarts its private server to apply changes.
 
 Browser and CLI users can copy `.env.example` to `.env.local` to set persistent local defaults. Existing environment variables remain valid in Electron when a provider has no saved desktop key. The selected provider determines where document context is processed.
 
@@ -153,20 +153,20 @@ console.log(result.assistantMessage.content);
 app/
   api/         workspace, document, chat, compile, search, citation, submission, and run routes
   components/  editor workstation, chat, PDF, navigation, and revision review
-  lib/         workspace registry, context state, diffs, outline, and citation audit
+  lib/         workspace registry, context state, diffs, outline, citation scan, and citation check summaries
 desktop/
   app/         Electron main process, secure preload bridge, and Forge configuration
   *.cjs        desktop development and standalone-runtime preparation scripts
 src/
   core/        safe paths, context assembly, chat orchestration, LaTeX compilation
-  providers/   streaming Ollama and Anthropic adapters
+  providers/   streaming Ollama, CLI, Anthropic, OpenAI, xAI/Grok, and demo adapters
   storage/     workspace-local conversation persistence
   cli.ts       command-line interface over the reusable core
 ```
 
 Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context. Message attachments are separate from pinned context: their extracted snapshots stay on the specific user turn that used them, capped at 25 MB of combined source data and 60,000 extracted characters.
 
-Fetched citation originals, extracted Markdown, JSONL text chunks, provenance, and the claim-to-source audit stay in the visible workspace `citations/` directory. The **Review paper** action includes bounded evidence packets when they exist and tells the model when evidence is missing or stale. A lexical candidate passage is a review lead, not an automatic finding that a claim is supported.
+Fetched citation originals, extracted Markdown, JSONL text chunks, provenance, the claim-to-source audit, and citation-check reports stay in the visible workspace `citations/` directory. The **Review paper** action includes bounded evidence packets when they exist and tells the model when evidence is missing or stale. The Citations rail **Check** action writes `check.json` and `check.md`, classifying cited claims as likely supported, weak lexical match, no candidate passage, source unavailable, or bibliography missing. A lexical candidate passage is a review lead, not an automatic finding that a claim is supported.
 
 ## Privacy and safety
 
