@@ -55,12 +55,19 @@ describe('desktop CLI provider setup', () => {
     const binDirectory = path.join(home, '.local', 'bin');
     await fs.mkdir(binDirectory, { recursive: true });
     const executablePath = path.join(binDirectory, process.platform === 'win32' ? 'claude.EXE' : 'claude');
+    const grokBinDirectory = path.join(home, '.grok', 'bin');
+    await fs.mkdir(grokBinDirectory, { recursive: true });
+    const grokPath = path.join(grokBinDirectory, process.platform === 'win32' ? 'grok.EXE' : 'grok');
     await fs.writeFile(executablePath, process.platform === 'win32' ? 'placeholder' : '#!/bin/sh\n', 'utf8');
+    await fs.writeFile(grokPath, process.platform === 'win32' ? 'placeholder' : '#!/bin/sh\n', 'utf8');
     if (process.platform !== 'win32') await fs.chmod(executablePath, 0o755);
+    if (process.platform !== 'win32') await fs.chmod(grokPath, 0o755);
 
     const environment = { PATH: '', USERPROFILE: home, HOME: home, PATHEXT: '.EXE;.CMD;.BAT;.COM' };
     expect(augmentPathEnvironment(environment).PATH).toContain(path.join(home, '.local', 'bin'));
+    expect(augmentPathEnvironment(environment).PATH).toContain(path.join(home, '.grok', 'bin'));
     expect(await resolveExecutable('claude', environment)).toBe(executablePath);
+    expect(await resolveExecutable('grok', environment)).toBe(grokPath);
   });
 
   it('auto-discovers npm global CLIs and Codex bundled with the VS Code extension', async () => {
@@ -139,6 +146,8 @@ describe('desktop CLI provider setup', () => {
     expect(installCommandFor('codex', 'win32')).toBe('irm https://chatgpt.com/codex/install.ps1 | iex');
     expect(installCommandFor('codex', 'linux')).toBe('curl -fsSL https://chatgpt.com/codex/install.sh | sh');
     expect(installCommandFor('gemini', 'win32')).toBe('npm install -g @google/gemini-cli');
-    expect(Object.keys(INSTALL_COMMANDS).sort()).toEqual(['claude', 'codex', 'gemini']);
+    expect(installCommandFor('grok', 'win32')).toBe('irm https://x.ai/cli/install.ps1 | iex');
+    expect(installCommandFor('grok', 'linux')).toBe('curl -fsSL https://x.ai/cli/install.sh | bash');
+    expect(Object.keys(INSTALL_COMMANDS).sort()).toEqual(['claude', 'codex', 'gemini', 'grok']);
   });
 });

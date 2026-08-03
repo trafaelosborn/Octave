@@ -39,7 +39,7 @@ The ordinary browser workflow remains available through `npm run dev`.
 
 On first run, the desktop app asks for a default provider and model. OpenAI, xAI, and Anthropic keys are encrypted with Electron `safeStorage` and stored as ciphertext in `provider-settings.json` beneath Electron's per-user application-data directory. The renderer receives only `saved`, `environment`, or `none` status for each credential; saved secret values are never read back into the interface.
 
-The same setup flow can choose supported command-line providers, open their native sign-in terminal, launch allowlisted installers, repair Windows user PATH entries for discovered installs, and validate account/model access before chat. Ollama's server URL and model default are not secrets and live in the same settings document. Saving settings restarts Octave's private local server so the new configuration takes effect. Existing environment variables remain fallback configuration when no desktop key has been saved.
+The same setup flow can choose supported command-line providers, open their native sign-in terminal, launch allowlisted installers, repair Windows user PATH entries for discovered installs, and validate account/model access before chat. Supported CLI presets include Codex CLI, Claude Code, Gemini CLI, and Grok Build. Ollama's server URL and model default are not secrets and live in the same settings document. Saving settings restarts Octave's private local server so the new configuration takes effect. Existing environment variables remain fallback configuration when no desktop key has been saved.
 
 ## Packaging
 

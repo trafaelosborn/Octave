@@ -314,7 +314,7 @@ export interface OctaveDesktopBridge {
     pathDirectory: string | null;
   }>;
   getProviderSettings: () => Promise<DesktopProviderSettings>;
-  installCliProvider: (input: { preset: 'codex' | 'claude' | 'gemini' }) => Promise<{ launched: true }>;
+  installCliProvider: (input: { preset: 'codex' | 'claude' | 'gemini' | 'grok' }) => Promise<{ launched: true }>;
   launchCliProviderSetup: (input: { command: string; args: string }) => Promise<{ launched: true }>;
   repairCliProviderPath: (input: { command: string }) => Promise<{
     installed: boolean;
@@ -324,7 +324,7 @@ export interface OctaveDesktopBridge {
     pathDirectory: string | null;
     repaired: boolean;
   }>;
-  validateCliProvider: (input: { command: string; preset: 'codex' | 'claude' | 'gemini' | 'custom'; model: string }) => Promise<{
+  validateCliProvider: (input: { command: string; preset: 'codex' | 'claude' | 'gemini' | 'grok' | 'custom'; model: string }) => Promise<{
     installed: boolean;
     path: string | null;
     onPath: boolean;

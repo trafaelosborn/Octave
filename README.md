@@ -13,6 +13,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Extracts read-only research context from PDF, Word, Excel, PowerPoint, OpenDocument, and RTF files with explicit limits and warnings.
 - Keeps durable project and document chats, with document conversations fixed to their source file.
 - Attaches up to eight supported project files to an individual message as bounded, durable extraction snapshots.
+- Builds source-grounded briefs over ordinary project files, separating primary evidence, secondary evidence, inference, and missing sources.
 - Saves completed model responses as linked Markdown review memos that remain readable outside Octave.
 - Streams responses from local Ollama models, command-line AI tools, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
@@ -185,6 +186,8 @@ See [docs/FORMAT_SUPPORT.md](docs/FORMAT_SUPPORT.md) for the supported research 
 See [docs/REVIEW_MEMOS.md](docs/REVIEW_MEMOS.md) for saved-review storage and source-link behavior.
 
 See [docs/CITATION_CORPUS.md](docs/CITATION_CORPUS.md) for source retrieval, manual imports, evidence packets, and corpus file formats.
+
+See [docs/SOURCE_GROUNDED_RESEARCH.md](docs/SOURCE_GROUNDED_RESEARCH.md) for the broader local-source research workflow and humanities/archive use cases.
 
 See [docs/SUBMISSION_DESK.md](docs/SUBMISSION_DESK.md) for profiles, preflight checks, package contents, and automation boundaries.
 

@@ -6,6 +6,8 @@ import { Icon } from './Icon';
 import { MarkdownMessage } from './MarkdownMessage';
 
 const MAX_CHAT_ATTACHMENTS = 8;
+const SOURCE_BRIEF_PROMPT = 'Build a source-grounded research brief from the project sources. Start by listing what evidence the current source folder contains, then answer the question with exact file paths or page/line cues when available, distinguish primary sources from secondary sources and inference, and list missing sources I should add next. Question: ';
+const MISSING_SOURCES_PROMPT = 'What sources are missing from this project folder for answering the research question? Separate primary sources, secondary scholarship, data or technical references, and archives, and explain why each would matter. Question: ';
 
 export function ChatPanel({
   messages,
@@ -128,6 +130,8 @@ export function ChatPanel({
             <p>Ask about an argument, trace an assumption, compare pinned sources, or prepare a reviewable revision.</p>
             <div className="prompt-suggestions">
               <button onClick={() => onInput('Give me a rigorous structural review of this document.')}>Structural review</button>
+              <button onClick={() => { onScope('workspace'); onInput(SOURCE_BRIEF_PROMPT); }}>Source brief</button>
+              <button onClick={() => { onScope('workspace'); onInput(MISSING_SOURCES_PROMPT); }}>Missing sources</button>
               <button onClick={() => onInput('Identify the weakest assumption and explain why it matters.')}>Find the weak assumption</button>
               <button onClick={() => onInput('Summarize the contribution without overstating what is proved.')}>Calibrate the claim</button>
             </div>

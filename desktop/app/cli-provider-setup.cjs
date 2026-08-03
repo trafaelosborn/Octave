@@ -15,6 +15,10 @@ const INSTALL_COMMANDS = Object.freeze({
   gemini: {
     default: 'npm install -g @google/gemini-cli',
   },
+  grok: {
+    win32: 'irm https://x.ai/cli/install.ps1 | iex',
+    default: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+  },
 });
 
 function augmentPathEnvironment(environment = process.env) {
@@ -82,6 +86,7 @@ async function validateCliProvider(input, environment = process.env) {
   if (preset === 'codex') return validateCodexCli(health.path, model, environment, health);
   if (preset === 'claude') return validatePromptCli(health.path, ['-p', '--model', model || 'sonnet', 'Reply with OK only.'], environment, health, 'Claude Code');
   if (preset === 'gemini') return validatePromptCli(health.path, ['-m', model || 'gemini-2.5-pro', '-p', 'Reply with OK only.'], environment, health, 'Gemini CLI');
+  if (preset === 'grok') return validatePromptCli(health.path, ['--no-auto-update', '-p', 'Reply with OK only.', '-m', model || 'grok-4.5', '--output-format', 'plain'], environment, health, 'Grok Build');
   return {
     ...health,
     accountStatus: 'unknown',
@@ -471,6 +476,7 @@ function candidateCliDirectories(environment) {
     home ? path.join(home, '.claude', 'local') : '',
     home ? path.join(home, '.codex', 'bin') : '',
     home ? path.join(home, '.gemini', 'bin') : '',
+    home ? path.join(home, '.grok', 'bin') : '',
     appData ? path.join(appData, 'npm') : '',
     localAppData ? path.join(localAppData, 'npm') : '',
     ...(home ? discoverVscodeCodexDirectories(home) : []),

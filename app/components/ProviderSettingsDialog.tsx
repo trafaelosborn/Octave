@@ -9,7 +9,7 @@ import type {
 } from '../lib/client-types';
 import { Icon } from './Icon';
 
-type CliPresetId = 'codex' | 'claude' | 'gemini' | 'custom';
+type CliPresetId = 'codex' | 'claude' | 'gemini' | 'grok' | 'custom';
 type CliStatusKind = 'idle' | 'ok' | 'warn' | 'error';
 type CliHealth = {
   checked: boolean;
@@ -88,6 +88,18 @@ const CLI_PRESETS: Array<{
     installCommand: 'npm install -g @google/gemini-cli',
   },
   {
+    id: 'grok',
+    name: 'Grok Build',
+    command: 'grok',
+    args: '--no-auto-update -p {prompt} -m {model} --output-format plain',
+    setupArgs: 'login',
+    model: 'grok-4.5',
+    detail: 'xAI account through Grok Build',
+    account: 'xAI',
+    installUrl: 'https://docs.x.ai/build/overview',
+    installCommand: 'irm https://x.ai/cli/install.ps1 | iex',
+  },
+  {
     id: 'custom',
     name: 'Custom CLI',
     command: '',
@@ -103,6 +115,7 @@ const CLI_INSTALL_EMPTY: CliInstallStatus = {
   codex: emptyCliHealth(),
   claude: emptyCliHealth(),
   gemini: emptyCliHealth(),
+  grok: emptyCliHealth(),
   custom: emptyCliHealth(),
 };
 
@@ -132,8 +145,9 @@ const PLATFORMS: PlatformOption[] = [
   {
     id: 'xai',
     name: 'Grok',
-    detail: 'xAI/Grok frontier models through an API key.',
+    detail: 'Grok frontier models through API keys or Grok Build.',
     apiProvider: 'xai',
+    cliPreset: 'grok',
     frontierModel: 'grok-4.5',
   },
   {
@@ -192,6 +206,9 @@ const CLI_MODEL_CHOICES: Partial<Record<CliPresetId, ModelChoice[]>> = {
   gemini: [
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', detail: 'Google frontier default' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', detail: 'Faster Gemini option' },
+  ],
+  grok: [
+    { id: 'grok-4.5', name: 'Grok 4.5', detail: 'xAI frontier default / Grok Build model' },
   ],
 };
 
@@ -442,7 +459,7 @@ export function ProviderSettingsDialog({
       setCliStatusKind('warn');
       return;
     }
-    if (!['codex', 'claude', 'gemini'].includes(cliPresetId)) {
+    if (!['codex', 'claude', 'gemini', 'grok'].includes(cliPresetId)) {
       setCliStatus('Choose a supported CLI preset before installing.');
       setCliStatusKind('warn');
       return;
@@ -451,7 +468,7 @@ export function ProviderSettingsDialog({
     setCliStatus('Opening installer terminal...');
     setCliStatusKind('idle');
     try {
-      await window.octaveDesktop.installCliProvider({ preset: cliPresetId as 'codex' | 'claude' | 'gemini' });
+      await window.octaveDesktop.installCliProvider({ preset: cliPresetId as 'codex' | 'claude' | 'gemini' | 'grok' });
       setCliStatus(`${preset?.name ?? 'CLI'} installer opened. Finish the install there, restart Octave if PATH changed, then Check installed.`);
       setCliStatusKind('ok');
     } catch (error) {
