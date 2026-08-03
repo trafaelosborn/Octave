@@ -9,11 +9,12 @@ const DEFAULT_MODELS = Object.freeze({
   cli: 'gpt-5.6-sol',
   anthropic: 'claude-sonnet-5',
   openai: 'gpt-5.6-sol',
-  xai: 'grok-4.5-latest',
+  xai: 'grok-4.5',
 });
 const MODEL_REPLACEMENTS = Object.freeze({
   'claude-sonnet-4-20250514': 'claude-sonnet-5',
   'claude-opus-4-20250514': 'claude-opus-4-8',
+  'grok-4.5-latest': 'grok-4.5',
 });
 const CLI_ARG_REPLACEMENTS = Object.freeze({
   'codex\0exec --model {model} -': 'exec --model {model} --output-last-message {outputFile} -',

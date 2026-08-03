@@ -134,8 +134,10 @@ describe('Electron provider settings', () => {
 
     expect(settings.models.anthropic).toBe('claude-sonnet-5');
     expect(settings.models.cli).toBe('claude-sonnet-5');
+    expect(settings.models.xai).toBe('grok-4.5');
     expect(environment.ANTHROPIC_MODEL).toBe('claude-sonnet-5');
     expect(environment.OCTAVE_CLI_MODEL).toBe('claude-sonnet-5');
+    expect(environment.XAI_MODEL).toBe('grok-4.5');
   });
 
   it('migrates the old Codex CLI preset to final-message output files', async () => {

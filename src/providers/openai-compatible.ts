@@ -127,8 +127,8 @@ export class XAIProvider extends OpenAICompatibleProvider {
       name: 'Grok (xAI)',
       apiKeyEnvironmentVariable: 'XAI_API_KEY',
       baseUrl: process.env.XAI_BASE_URL ?? 'https://api.x.ai',
-      model: process.env.XAI_MODEL ?? 'grok-4.5-latest',
-      modelsPath: '/v1/language-models',
+      model: process.env.XAI_MODEL ?? 'grok-4.5',
+      modelsPath: '/v1/models',
       modelFilter: (id) => /^grok-(?!imagine)/i.test(id),
       ...options,
     });

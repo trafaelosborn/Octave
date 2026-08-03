@@ -134,7 +134,7 @@ const PLATFORMS: PlatformOption[] = [
     name: 'Grok',
     detail: 'xAI/Grok frontier models through an API key.',
     apiProvider: 'xai',
-    frontierModel: 'grok-4.5-latest',
+    frontierModel: 'grok-4.5',
   },
   {
     id: 'gemini',
@@ -171,7 +171,7 @@ const API_MODEL_CHOICES: Partial<Record<DesktopCloudProviderId, ModelChoice[]>> 
     { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', detail: 'Fastest Claude option' },
   ],
   xai: [
-    { id: 'grok-4.5-latest', name: 'Grok 4.5 latest', detail: 'xAI frontier default' },
+    { id: 'grok-4.5', name: 'Grok 4.5', detail: 'xAI frontier default' },
   ],
 };
 

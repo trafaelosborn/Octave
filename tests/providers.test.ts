@@ -66,6 +66,18 @@ describe('provider streaming', () => {
     expect(chunks.join('')).toBe('research answer');
   });
 
+  it('lists xAI models from the OpenAI-compatible models endpoint', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ id: 'grok-4.5' }, { id: 'grok-imagine-1' }],
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const models = await new XAIProvider({ apiKey: 'test', baseUrl: 'https://xai.test' }).listModels();
+
+    expect(fetchMock).toHaveBeenCalledWith('https://xai.test/v1/models', expect.any(Object));
+    expect(models.map((model) => model.id)).toEqual(['grok-4.5']);
+  });
+
   it('streams responses from a command-line provider through stdin', async () => {
     const provider = new CliProvider({
       command: process.execPath,
