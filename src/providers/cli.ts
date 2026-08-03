@@ -41,42 +41,64 @@ export class CliProvider implements LLMProvider {
 
     const model = options.model ?? this.defaultModel;
     const prompt = formatMessages(messages, model);
-    const args = this.args.map((argument) => argument.replaceAll('{prompt}', prompt).replaceAll('{model}', model));
+    const outputDirectory = this.args.some((argument) => argument.includes('{outputFile}'))
+      ? await fs.mkdtemp(path.join(os.tmpdir(), 'octave-cli-output-'))
+      : '';
+    const outputFile = outputDirectory ? path.join(outputDirectory, 'message.txt') : '';
+    const args = this.args.map((argument) => argument
+      .replaceAll('{prompt}', prompt)
+      .replaceAll('{model}', model)
+      .replaceAll('{outputFile}', outputFile));
     const sendsPromptOnArgv = this.args.some((argument) => argument.includes('{prompt}'));
-    const child = spawn(this.command, args, {
-      cwd: process.cwd(),
-      env: { ...process.env, OCTAVE_MODEL: model },
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    try {
+      const child = spawn(this.command, args, {
+        cwd: process.cwd(),
+        env: { ...process.env, OCTAVE_MODEL: model },
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      stderr += chunk;
-      if (stderr.length > 8_000) stderr = stderr.slice(-8_000);
-    });
+      let stderr = '';
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk: string) => {
+        stderr += chunk;
+        if (stderr.length > 8_000) stderr = stderr.slice(-8_000);
+      });
 
-    if (sendsPromptOnArgv) {
-      child.stdin.end();
-    } else {
-      child.stdin.end(prompt);
-    }
+      if (sendsPromptOnArgv) {
+        child.stdin.end();
+      } else {
+        child.stdin.end(prompt);
+      }
 
-    const exitCode = new Promise<number | null>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', resolve);
-    });
+      const exitCode = new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', resolve);
+      });
 
-    child.stdout.setEncoding('utf8');
-    for await (const chunk of child.stdout) {
-      if (typeof chunk === 'string' && chunk) yield chunk;
-    }
+      child.stdout.setEncoding('utf8');
+      if (!outputFile) {
+        for await (const chunk of child.stdout) {
+          if (typeof chunk === 'string' && chunk) yield chunk;
+        }
+      } else {
+        for await (const _chunk of child.stdout) {
+          // Some CLIs, including Codex, print progress transcripts even when the final
+          // assistant answer is written to an output file. Keep Octave chat clean.
+        }
+      }
 
-    const code = await exitCode;
-    if (code !== 0) {
-      const detail = stderr.trim().slice(0, 1_000);
-      throw new Error(`CLI provider exited with code ${code ?? 'unknown'}${detail ? `: ${detail}` : ''}`);
+      const code = await exitCode;
+      if (code !== 0) {
+        const detail = stderr.trim().slice(0, 1_000);
+        throw new Error(`CLI provider exited with code ${code ?? 'unknown'}${detail ? `: ${detail}` : ''}`);
+      }
+      if (outputFile) {
+        const answer = await fs.readFile(outputFile, 'utf8');
+        if (answer) yield answer;
+      }
+    } finally {
+      if (outputDirectory) await fs.rm(outputDirectory, { recursive: true, force: true });
     }
   }
 }

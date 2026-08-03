@@ -87,6 +87,20 @@ describe('provider streaming', () => {
     expect(chunks.join('')).toBe('--model|opus');
   });
 
+  it('reads final CLI responses from output-file placeholders when stdout is noisy', async () => {
+    const provider = new CliProvider({
+      command: process.execPath,
+      args: [
+        '-e',
+        'const fs=require("fs"); const out=process.argv[1]; process.stdout.write("transcript noise"); fs.writeFileSync(out, "clean answer");',
+        '{outputFile}',
+      ],
+    });
+    const chunks: string[] = [];
+    for await (const chunk of provider.streamChat([{ role: 'user', content: 'Hello' }])) chunks.push(chunk);
+    expect(chunks.join('')).toBe('clean answer');
+  });
+
   it('supports shell-like CLI argument parsing', () => {
     expect(parseShellWords('exec --model "gpt test" --flag\\ value')).toEqual(['exec', '--model', 'gpt test', '--flag value']);
   });

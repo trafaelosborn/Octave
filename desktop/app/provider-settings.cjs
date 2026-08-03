@@ -15,6 +15,9 @@ const MODEL_REPLACEMENTS = Object.freeze({
   'claude-sonnet-4-20250514': 'claude-sonnet-5',
   'claude-opus-4-20250514': 'claude-opus-4-8',
 });
+const CLI_ARG_REPLACEMENTS = Object.freeze({
+  'codex\0exec --model {model} -': 'exec --model {model} --output-last-message {outputFile} -',
+});
 const KEY_ENVIRONMENT_VARIABLES = Object.freeze({
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
@@ -105,7 +108,7 @@ function normalizeStoredDocument(value) {
     models: Object.fromEntries(PROVIDERS.map((provider) => [provider, normalizeModel(models[provider], defaults.models[provider])])),
     ollamaBaseUrl: normalizeOllamaUrl(value.ollamaBaseUrl, defaults.ollamaBaseUrl),
     cliCommand: normalizeCommand(value.cliCommand, defaults.cliCommand),
-    cliArgs: normalizeCliArgs(value.cliArgs, defaults.cliArgs),
+    cliArgs: normalizeCliArgs(value.cliArgs, defaults.cliArgs, value.cliCommand),
     credentials: normalizedCredentials,
   };
 }
@@ -140,7 +143,7 @@ function normalizeInput(input, current, encryption) {
     ])),
     ollamaBaseUrl: normalizeOllamaUrl(input.ollamaBaseUrl, current.ollamaBaseUrl),
     cliCommand: normalizeCommand(input.cliCommand, current.cliCommand),
-    cliArgs: normalizeCliArgs(input.cliArgs, current.cliArgs),
+    cliArgs: normalizeCliArgs(input.cliArgs, current.cliArgs, input.cliCommand),
     credentials,
   };
 }
@@ -174,7 +177,7 @@ function toPublicSettings(document, encryption, environment) {
       ? normalizeCommand(environment.OCTAVE_CLI_COMMAND, document.cliCommand)
       : document.cliCommand,
     cliArgs: !document.completed && environment.OCTAVE_CLI_ARGS
-      ? normalizeCliArgs(environment.OCTAVE_CLI_ARGS, document.cliArgs)
+      ? normalizeCliArgs(environment.OCTAVE_CLI_ARGS, document.cliArgs, document.cliCommand)
       : document.cliArgs,
     credentialSources,
   };
@@ -240,12 +243,12 @@ function normalizeCommand(value, fallback) {
   return normalized;
 }
 
-function normalizeCliArgs(value, fallback) {
+function normalizeCliArgs(value, fallback, command = '') {
   if (typeof value !== 'string') return fallback;
   const normalized = value.trim();
   if (normalized.length > 8_000) throw new Error('CLI arguments are too long.');
   if (/[\r\n]/.test(normalized)) throw new Error('CLI arguments must fit on one line.');
-  return normalized;
+  return CLI_ARG_REPLACEMENTS[`${normalizeCommand(command, '')}\0${normalized}`] || normalized;
 }
 
 module.exports = {

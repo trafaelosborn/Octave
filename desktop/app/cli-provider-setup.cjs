@@ -437,10 +437,10 @@ function quotePowerShellArgument(value) {
 }
 
 function openWindowsTerminal(powershellArgs) {
-  spawn('cmd.exe', ['/d', '/s', '/c', 'start', 'Octave CLI setup', 'powershell.exe', ...powershellArgs], {
+  spawn('powershell.exe', powershellArgs, {
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
+    windowsHide: false,
   }).unref();
 }
 

@@ -55,7 +55,7 @@ const CLI_PRESETS: Array<{
     id: 'codex',
     name: 'Codex CLI',
     command: 'codex',
-    args: 'exec --model {model} -',
+    args: 'exec --model {model} --output-last-message {outputFile} -',
     setupArgs: 'login',
     model: 'gpt-5.6-sol',
     detail: 'OpenAI account through the Codex CLI',

@@ -138,6 +138,33 @@ describe('Electron provider settings', () => {
     expect(environment.OCTAVE_CLI_MODEL).toBe('claude-sonnet-5');
   });
 
+  it('migrates the old Codex CLI preset to final-message output files', async () => {
+    const { filePath, store } = await createStore();
+    await fs.writeFile(filePath, JSON.stringify({
+      version: 1,
+      completed: true,
+      defaultProvider: 'cli',
+      models: {
+        demo: 'demo',
+        ollama: 'llama3.1',
+        cli: 'gpt-5.6-sol',
+        anthropic: 'claude-sonnet-5',
+        openai: 'gpt-5.6-sol',
+        xai: 'grok-4.5-latest',
+      },
+      ollamaBaseUrl: 'http://127.0.0.1:11434',
+      cliCommand: 'codex',
+      cliArgs: 'exec --model {model} -',
+      credentials: {},
+    }));
+
+    const settings = await store.getPublicSettings();
+    const environment = await store.getEnvironment();
+
+    expect(settings.cliArgs).toBe('exec --model {model} --output-last-message {outputFile} -');
+    expect(environment.OCTAVE_CLI_ARGS).toBe('exec --model {model} --output-last-message {outputFile} -');
+  });
+
   it('removes a saved key without erasing an environment credential', async () => {
     const { store } = await createStore({ OPENAI_API_KEY: 'environment-secret' });
     await store.save(settingsInput({ openai: 'saved-secret' }));
