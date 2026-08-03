@@ -26,6 +26,8 @@ import type {
   ReviewMemoMeta,
   RevisionPreview,
   SearchResult,
+  SourceInventory,
+  SourceRole,
   SubmissionManifest,
   SubmissionPackage,
   SubmissionPreflight,
@@ -95,6 +97,7 @@ export default function OctavePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [citations, setCitations] = useState<CitationScan | null>(null);
+  const [sources, setSources] = useState<SourceInventory | null>(null);
   const [error, setError] = useState('');
   const [booting, setBooting] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,6 +110,7 @@ export default function OctavePage() {
   const [searching, setSearching] = useState(false);
   const [syncingCitations, setSyncingCitations] = useState(false);
   const [checkingCitations, setCheckingCitations] = useState(false);
+  const [syncingSources, setSyncingSources] = useState(false);
   const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
   const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [savingProviderSettings, setSavingProviderSettings] = useState(false);
@@ -187,19 +191,22 @@ export default function OctavePage() {
     setSubmissionManifest(null);
     setSubmissionPreflight(null);
     setSubmissionPackages([]);
+    setSources(null);
 
-    const [fileData, contextData, chatData, reviewData, citationData] = await Promise.all([
+    const [fileData, contextData, chatData, reviewData, citationData, sourceData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ pinnedPaths: string[] }>(`/api/context?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ reviews: ReviewMemoMeta[] }>(`/api/reviews?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<SourceInventory>(`/api/sources?workspaceId=${encodeURIComponent(workspaceId)}`),
     ]);
     setFiles(fileData.files);
     setPinnedPaths(contextData.pinnedPaths);
     setChats(chatData.chats);
     setReviews(reviewData.reviews);
     setCitations(citationData);
+    setSources(sourceData);
 
     const workspace = knownWorkspaces.find((candidate) => candidate.id === workspaceId) ?? fileData.workspace;
     const paths = new Set(fileData.files.map((file) => file.path));
@@ -322,6 +329,7 @@ export default function OctavePage() {
         setReviews([]);
         setActiveReview(null);
         setAttachmentPaths([]);
+        setSources(null);
         setWorkspaceFormOpen(true);
       }
     }
@@ -495,16 +503,55 @@ export default function OctavePage() {
     }
   }
 
-  async function createNewChat(): Promise<string> {
+  async function refreshSources(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    setSources(await apiJson<SourceInventory>(`/api/sources?workspaceId=${encodeURIComponent(activeWorkspaceId)}`));
+  }
+
+  async function syncSources(): Promise<void> {
+    if (!activeWorkspaceId || syncingSources) return;
+    setSyncingSources(true);
+    try {
+      const inventory = await apiJson<SourceInventory>('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, action: 'refresh' }),
+      });
+      setSources(inventory);
+      await refreshFiles();
+      setError('');
+    } finally {
+      setSyncingSources(false);
+    }
+  }
+
+  async function setSourceRole(sourcePath: string, role: SourceRole): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const inventory = await apiJson<SourceInventory>('/api/sources', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: activeWorkspaceId, path: sourcePath, role }),
+    });
+    setSources(inventory);
+    setError('');
+  }
+
+  async function buildSourceBrief(): Promise<void> {
+    if (!sources || sources.items.length === 0) throw new Error('Add files to a sources/ folder before building a source brief.');
+    const attachmentSelection = sources.items.slice(0, 8).map((source) => source.path);
+    await sendChat(buildSourceBriefPrompt(sources), false, attachmentSelection, 'workspace');
+  }
+
+  async function createNewChat(scopeOverride = chatScope): Promise<string> {
     if (!activeWorkspaceId) throw new Error('Open a workspace before starting a chat.');
-    if (chatScope === 'document' && !selectedPath) throw new Error('Open a document before starting a document chat.');
+    if (scopeOverride === 'document' && !selectedPath) throw new Error('Open a document before starting a document chat.');
     const data = await apiJson<{ chat: ChatSession }>('/api/chats', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId: activeWorkspaceId,
-        scope: chatScope,
-        documentPath: chatScope === 'document' ? selectedPath : undefined,
+        scope: scopeOverride,
+        documentPath: scopeOverride === 'document' ? selectedPath : undefined,
       }),
     });
     setActiveChatId(data.chat.id);
@@ -630,16 +677,19 @@ export default function OctavePage() {
     promptOverride?: string,
     includeCitationEvidence = false,
     attachmentPathOverride?: string[],
+    scopeOverride?: ChatScope,
   ): Promise<void> {
     const prompt = (promptOverride ?? chatInput).trim();
     if (!prompt || chatLoading || !activeWorkspaceId) return;
 
+    const effectiveScope = scopeOverride ?? chatScope;
     const effectiveAttachmentPaths = attachmentPathOverride ?? attachmentPaths;
-    const newChatDocumentPath = chatScope === 'document' ? selectedPath : '';
-    const chatId = activeChatId || await createNewChat();
-    const scopedDocumentPath = activeChatId ? chatDocumentPath : newChatDocumentPath;
+    const newChatDocumentPath = effectiveScope === 'document' ? selectedPath : '';
+    const shouldCreateChat = !activeChatId || effectiveScope !== chatScope;
+    const chatId = shouldCreateChat ? await createNewChat(effectiveScope) : activeChatId;
+    const scopedDocumentPath = shouldCreateChat ? newChatDocumentPath : chatDocumentPath;
     const now = new Date().toISOString();
-    const priorMessages = messages;
+    const priorMessages = shouldCreateChat ? [] : messages;
     const pendingAttachments = effectiveAttachmentPaths
       .map((attachmentPath) => files.find((file) => file.path === attachmentPath))
       .filter((file): file is OctaveFile => Boolean(file))
@@ -674,7 +724,7 @@ export default function OctavePage() {
           workspaceId: activeWorkspaceId,
           chatId,
           prompt,
-          documentPath: chatScope === 'document' ? (scopedDocumentPath || undefined) : undefined,
+          documentPath: effectiveScope === 'document' ? (scopedDocumentPath || undefined) : undefined,
           provider: providerId,
           model: modelId || undefined,
           attachmentPaths: effectiveAttachmentPaths.length > 0 ? effectiveAttachmentPaths : undefined,
@@ -909,8 +959,10 @@ export default function OctavePage() {
         activeReviewId={activeReview?.id ?? ''}
         outline={outline}
         citations={citations}
+        sources={sources}
         syncingCitations={syncingCitations}
         checkingCitations={checkingCitations}
+        syncingSources={syncingSources}
         newDocumentPath={newDocumentPath}
         onClose={() => setRailOpen(false)}
         onRailView={setRailView}
@@ -939,6 +991,11 @@ export default function OctavePage() {
         onSyncCitations={guard(syncCitationSources)}
         onCheckCitations={guard(checkCitations)}
         onOpenCitationSource={(path) => loadDocument(path).catch(showError)}
+        onRefreshSources={guard(refreshSources)}
+        onSyncSources={guard(syncSources)}
+        onOpenSourceFile={(path) => loadDocument(path).catch(showError)}
+        onBuildSourceBrief={guard(buildSourceBrief)}
+        onSetSourceRole={(path, role) => setSourceRole(path, role).catch(showError)}
         onNewDocumentPath={setNewDocumentPath}
         onCreateDocument={guard(createDocument)}
       />
@@ -1210,6 +1267,29 @@ function toOptimisticAttachment(file: OctaveFile): ChatAttachment {
     sourceBytes: file.size,
     truncated: false,
   };
+}
+
+function buildSourceBriefPrompt(inventory: SourceInventory): string {
+  const itemLines = inventory.items.slice(0, 24).map((source) => (
+    `- ${source.path} — ${source.role}${source.roleSource === 'manual' ? ' (manual)' : ''}`
+  ));
+  return [
+    'Build a source-grounded research brief from the attached source files and the project source inventory.',
+    'Start with what the current source shelf contains, grouped as primary sources, secondary sources, archive/data, and unknown.',
+    'Answer the research question only as far as the attached/project sources support it.',
+    'Use exact file paths and page or line cues when available.',
+    'Separate: (1) what the sources directly establish, (2) reasonable inference, (3) uncertainty, and (4) missing sources to add next.',
+    '',
+    `Inventory generated at: ${inventory.generatedAt}`,
+    `Inventory file: ${inventory.inventoryPath}`,
+    `Summary: ${inventory.summary.primary} primary, ${inventory.summary.secondary} secondary, ${inventory.summary.dataset_archive} archive/data, ${inventory.summary.unknown} unknown.`,
+    '',
+    'Inventory sample:',
+    ...itemLines,
+    itemLines.length < inventory.items.length ? `- ... ${inventory.items.length - itemLines.length} additional sources omitted from this prompt sample` : '',
+    '',
+    'Research question or topic: ',
+  ].filter(Boolean).join('\n');
 }
 
 async function apiJson<T = Record<string, unknown>>(url: string, init?: RequestInit): Promise<T> {

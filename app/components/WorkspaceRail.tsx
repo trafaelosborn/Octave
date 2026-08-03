@@ -6,12 +6,15 @@ import type {
   RailView,
   ReviewMemoMeta,
   SearchResult,
+  SourceInventory,
+  SourceRole,
   Workspace,
 } from '../lib/client-types';
 import { Icon, type IconName } from './Icon';
 
 const railTabs: Array<{ id: RailView; label: string; icon: IconName }> = [
   { id: 'files', label: 'Files', icon: 'folder' },
+  { id: 'sources', label: 'Sources', icon: 'book' },
   { id: 'search', label: 'Search', icon: 'search' },
   { id: 'chats', label: 'Chats', icon: 'chat' },
   { id: 'reviews', label: 'Reviews', icon: 'book' },
@@ -41,8 +44,10 @@ export function WorkspaceRail({
   activeReviewId,
   outline,
   citations,
+  sources,
   syncingCitations,
   checkingCitations,
+  syncingSources,
   newDocumentPath,
   onClose,
   onRailView,
@@ -71,6 +76,11 @@ export function WorkspaceRail({
   onSyncCitations,
   onCheckCitations,
   onOpenCitationSource,
+  onRefreshSources,
+  onSyncSources,
+  onOpenSourceFile,
+  onBuildSourceBrief,
+  onSetSourceRole,
   onNewDocumentPath,
   onCreateDocument,
 }: {
@@ -94,8 +104,10 @@ export function WorkspaceRail({
   activeReviewId: string;
   outline: OutlineItem[];
   citations: CitationScan | null;
+  sources: SourceInventory | null;
   syncingCitations: boolean;
   checkingCitations: boolean;
+  syncingSources: boolean;
   newDocumentPath: string;
   onClose: () => void;
   onRailView: (view: RailView) => void;
@@ -124,6 +136,11 @@ export function WorkspaceRail({
   onSyncCitations: () => void;
   onCheckCitations: () => void;
   onOpenCitationSource: (path: string) => void;
+  onRefreshSources: () => void;
+  onSyncSources: () => void;
+  onOpenSourceFile: (path: string) => void;
+  onBuildSourceBrief: () => void;
+  onSetSourceRole: (path: string, role: SourceRole) => void;
   onNewDocumentPath: (value: string) => void;
   onCreateDocument: () => void;
 }) {
@@ -180,6 +197,7 @@ export function WorkspaceRail({
               <span>{tab.label}</span>
               {tab.id === 'chats' && chats.length > 0 && <b>{chats.length}</b>}
               {tab.id === 'reviews' && reviews.length > 0 && <b>{reviews.length}</b>}
+              {tab.id === 'sources' && sources?.summary.total ? <b>{sources.summary.total}</b> : null}
               {tab.id === 'context' && pinnedPaths.length > 0 && <b>{pinnedPaths.length}</b>}
               {tab.id === 'citations' && citations?.summary.missing ? <b className="warn-count">{citations.summary.missing}</b> : null}
             </button>
@@ -209,6 +227,58 @@ export function WorkspaceRail({
                 <input value={newDocumentPath} onChange={(event) => onNewDocumentPath(event.target.value)} placeholder="new-paper.tex" />
                 <button onClick={onCreateDocument}>Create</button>
               </div>
+            </div>
+          )}
+
+          {railView === 'sources' && (
+            <div className="rail-section">
+              <div className="section-heading">
+                <span>Source library</span>
+                <div className="section-actions">
+                  <button className="text-button" onClick={onRefreshSources} disabled={syncingSources}>Refresh</button>
+                  <button className="text-button" onClick={onSyncSources} disabled={syncingSources}>{syncingSources ? 'Saving...' : 'Save inventory'}</button>
+                </div>
+              </div>
+              {sources ? (
+                <>
+                  <p className="rail-explainer">Files in <code>sources/</code>, <code>primary/</code>, <code>secondary/</code>, <code>archive/</code>, or <code>data/</code> become an evidence shelf for source-grounded briefs.</p>
+                  <div className="source-metrics">
+                    <Metric label="Total" value={sources.summary.total}/>
+                    <Metric label="Primary" value={sources.summary.primary}/>
+                    <Metric label="Secondary" value={sources.summary.secondary}/>
+                    <Metric label="Archive/data" value={sources.summary.dataset_archive}/>
+                  </div>
+                  <button className="button button-secondary full-width" onClick={onBuildSourceBrief} disabled={sources.items.length === 0}>Build source brief</button>
+                  {!sources.sourceRootsPresent && (
+                    <p className="citation-setup-note">Create a <code>sources/</code> folder, then add PDFs, documents, notes, spreadsheets, or images. Octave will inventory them here.</p>
+                  )}
+                  {sources.items.length > 0 && (
+                    <button className="text-button" onClick={() => onOpenSourceFile(sources.inventoryPath)}>Open machine-readable inventory</button>
+                  )}
+                  <div className="source-list">
+                    {sources.items.map((source) => (
+                      <article className={`source-card source-role-${source.role}`} key={source.path}>
+                        <header>
+                          <button onClick={() => onOpenSourceFile(source.path)} title={source.path}>{source.path}</button>
+                          <span>{source.roleSource}</span>
+                        </header>
+                        <label>
+                          <span>Type</span>
+                          <select value={source.role} onChange={(event) => onSetSourceRole(source.path, event.target.value as SourceRole)}>
+                            <option value="primary">Primary</option>
+                            <option value="secondary">Secondary</option>
+                            <option value="dataset_archive">Archive/data</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                        </label>
+                        <small>{source.rationale}</small>
+                        <div className="source-tags">{source.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+                      </article>
+                    ))}
+                    {sources.items.length === 0 && <RailEmpty text="No source folders found yet." />}
+                  </div>
+                </>
+              ) : <RailEmpty text="Source inventory appears after a workspace is opened." />}
             </div>
           )}
 

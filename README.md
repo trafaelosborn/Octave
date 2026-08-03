@@ -13,7 +13,7 @@ It began as the research environment inside [Doris](https://github.com/trafaelos
 - Extracts read-only research context from PDF, Word, Excel, PowerPoint, OpenDocument, and RTF files with explicit limits and warnings.
 - Keeps durable project and document chats, with document conversations fixed to their source file.
 - Attaches up to eight supported project files to an individual message as bounded, durable extraction snapshots.
-- Builds source-grounded briefs over ordinary project files, separating primary evidence, secondary evidence, inference, and missing sources.
+- Inventories local source folders, preserves manual primary/secondary/archive tags in `.octave/source-inventory.json`, and builds source-grounded briefs over those files.
 - Saves completed model responses as linked Markdown review memos that remain readable outside Octave.
 - Streams responses from local Ollama models, command-line AI tools, Anthropic, OpenAI, or xAI/Grok. An offline demo provider exercises the interface without credentials.
 - Produces document-wide edit proposals as selectable diff hunks. Nothing is written before review.
@@ -152,9 +152,9 @@ console.log(result.assistantMessage.content);
 
 ```text
 app/
-  api/         workspace, document, chat, compile, search, citation, submission, and run routes
+  api/         workspace, document, chat, compile, search, source, citation, submission, and run routes
   components/  editor workstation, chat, PDF, navigation, and revision review
-  lib/         workspace registry, context state, diffs, outline, citation scan, and citation check summaries
+  lib/         workspace registry, context state, diffs, outline, source inventory, citation scan, and citation check summaries
 desktop/
   app/         Electron main process, secure preload bridge, and Forge configuration
   *.cjs        desktop development and standalone-runtime preparation scripts
@@ -166,6 +166,8 @@ src/
 ```
 
 Octave persists both project chats and document chats inside the workspace. Document chats remain bound to their source document; project chats use explicitly pinned files as bounded context. Message attachments are separate from pinned context: their extracted snapshots stay on the specific user turn that used them, capped at 25 MB of combined source data and 60,000 extracted characters.
+
+The Sources rail scans source-like folders such as `sources/`, `primary/`, `secondary/`, `archive/`, and `data/`, infers primary/secondary/archive roles, and lets the researcher correct them. The saved `.octave/source-inventory.json` becomes a machine-readable evidence shelf for source-grounded briefs.
 
 Fetched citation originals, extracted Markdown, JSONL text chunks, provenance, the claim-to-source audit, and citation-check reports stay in the visible workspace `citations/` directory. The **Review paper** action includes bounded evidence packets when they exist and tells the model when evidence is missing or stale. The Citations rail **Check** action writes `check.json` and `check.md`, classifying cited claims as likely supported, weak lexical match, no candidate passage, source unavailable, or bibliography missing. A lexical candidate passage is a review lead, not an automatic finding that a claim is supported.
 

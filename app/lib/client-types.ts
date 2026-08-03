@@ -170,6 +170,30 @@ export interface CitationSourceRecord {
   }>;
 }
 
+export type SourceRole = 'primary' | 'secondary' | 'dataset_archive' | 'unknown';
+
+export interface SourceInventoryItem {
+  path: string;
+  name: string;
+  extension: string;
+  size: number;
+  mtimeMs: number;
+  role: SourceRole;
+  roleSource: 'inferred' | 'manual';
+  tags: string[];
+  rationale: string;
+}
+
+export interface SourceInventory {
+  version: 1;
+  generatedAt: string;
+  inventoryPath: '.octave/source-inventory.json';
+  sourceRoots: string[];
+  sourceRootsPresent: boolean;
+  items: SourceInventoryItem[];
+  summary: Record<SourceRole, number> & { total: number; manual: number };
+}
+
 export interface RevisionPreview {
   path: string;
   instruction: string;
@@ -278,7 +302,7 @@ export interface OutlineItem {
 }
 
 export type WorkView = 'editor' | 'chat' | 'review' | 'memo' | 'submission' | 'log' | 'pdf';
-export type RailView = 'files' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';
+export type RailView = 'files' | 'sources' | 'search' | 'chats' | 'reviews' | 'outline' | 'citations' | 'context';
 
 export type DesktopProviderId = ProviderStatus['id'];
 export type DesktopCloudProviderId = 'anthropic' | 'openai' | 'xai';
