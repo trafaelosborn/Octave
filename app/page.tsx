@@ -11,6 +11,7 @@ import { SubmissionPanel } from './components/SubmissionPanel';
 import { WorkspaceRail } from './components/WorkspaceRail';
 import type {
   ChatAttachment,
+  ClaimCheckMeta,
   ChatMessage,
   ChatSession,
   ChatSessionMeta,
@@ -100,6 +101,7 @@ export default function OctavePage() {
   const [citations, setCitations] = useState<CitationScan | null>(null);
   const [sources, setSources] = useState<SourceInventory | null>(null);
   const [evidenceMaps, setEvidenceMaps] = useState<EvidenceMapMeta[]>([]);
+  const [claimChecks, setClaimChecks] = useState<ClaimCheckMeta[]>([]);
   const [error, setError] = useState('');
   const [booting, setBooting] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -114,6 +116,7 @@ export default function OctavePage() {
   const [checkingCitations, setCheckingCitations] = useState(false);
   const [syncingSources, setSyncingSources] = useState(false);
   const [creatingEvidenceMap, setCreatingEvidenceMap] = useState(false);
+  const [checkingClaims, setCheckingClaims] = useState(false);
   const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
   const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [savingProviderSettings, setSavingProviderSettings] = useState(false);
@@ -196,8 +199,9 @@ export default function OctavePage() {
     setSubmissionPackages([]);
     setSources(null);
     setEvidenceMaps([]);
+    setClaimChecks([]);
 
-    const [fileData, contextData, chatData, reviewData, citationData, sourceData, evidenceMapData] = await Promise.all([
+    const [fileData, contextData, chatData, reviewData, citationData, sourceData, evidenceMapData, claimCheckData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ pinnedPaths: string[] }>(`/api/context?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}`),
@@ -205,6 +209,7 @@ export default function OctavePage() {
       apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<SourceInventory>(`/api/sources?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ maps: EvidenceMapMeta[] }>(`/api/evidence-maps?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<{ reports: ClaimCheckMeta[] }>(`/api/claim-checks?workspaceId=${encodeURIComponent(workspaceId)}`),
     ]);
     setFiles(fileData.files);
     setPinnedPaths(contextData.pinnedPaths);
@@ -213,6 +218,7 @@ export default function OctavePage() {
     setCitations(citationData);
     setSources(sourceData);
     setEvidenceMaps(evidenceMapData.maps);
+    setClaimChecks(claimCheckData.reports);
 
     const workspace = knownWorkspaces.find((candidate) => candidate.id === workspaceId) ?? fileData.workspace;
     const paths = new Set(fileData.files.map((file) => file.path));
@@ -337,6 +343,7 @@ export default function OctavePage() {
         setAttachmentPaths([]);
         setSources(null);
         setEvidenceMaps([]);
+        setClaimChecks([]);
         setWorkspaceFormOpen(true);
       }
     }
@@ -556,6 +563,32 @@ export default function OctavePage() {
       setError('');
     } finally {
       setCreatingEvidenceMap(false);
+    }
+  }
+
+  async function refreshClaimChecks(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ reports: ClaimCheckMeta[] }>(`/api/claim-checks?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+    setClaimChecks(data.reports);
+  }
+
+  async function checkDraftClaims(): Promise<void> {
+    if (!activeWorkspaceId || !selectedPath || checkingClaims) return;
+    setCheckingClaims(true);
+    try {
+      if (dirty && !documentReadOnly) await saveDocument();
+      const data = await apiJson<{ report: { artifactPaths: { markdown: string } }; reports: ClaimCheckMeta[] }>('/api/claim-checks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, documentPath: selectedPath }),
+      });
+      setClaimChecks(data.reports);
+      await refreshFiles();
+      await loadDocument(data.report.artifactPaths.markdown);
+      setRailView('sources');
+      setError('');
+    } finally {
+      setCheckingClaims(false);
     }
   }
 
@@ -995,10 +1028,12 @@ export default function OctavePage() {
         citations={citations}
         sources={sources}
         evidenceMaps={evidenceMaps}
+        claimChecks={claimChecks}
         syncingCitations={syncingCitations}
         checkingCitations={checkingCitations}
         syncingSources={syncingSources}
         creatingEvidenceMap={creatingEvidenceMap}
+        checkingClaims={checkingClaims}
         newDocumentPath={newDocumentPath}
         onClose={() => setRailOpen(false)}
         onRailView={setRailView}
@@ -1033,6 +1068,8 @@ export default function OctavePage() {
         onBuildSourceBrief={guard(buildSourceBrief)}
         onCreateEvidenceMap={guard(createEvidenceMap)}
         onOpenEvidenceMap={(path) => loadDocument(path).catch(showError)}
+        onCheckClaims={guard(checkDraftClaims)}
+        onOpenClaimCheck={(path) => loadDocument(path).catch(showError)}
         onSetSourceRole={(path, role) => setSourceRole(path, role).catch(showError)}
         onNewDocumentPath={setNewDocumentPath}
         onCreateDocument={guard(createDocument)}
@@ -1063,6 +1100,7 @@ export default function OctavePage() {
             <span className={`save-state ${dirty ? 'dirty' : ''}`}>{saving ? 'Saving' : dirty ? 'Unsaved changes' : selectedPath ? 'Saved locally' : 'Local-first'}</span>
             {canRun && <button className="button button-quiet" disabled={running} onClick={guard(runActiveDocument)}><Icon name="terminal" size={15}/>{running ? 'Running...' : 'Run'}</button>}
             <button className="button button-quiet review-button" disabled={!selectedPath || chatLoading} onClick={() => sendChat(REVIEW_PROMPT, true).catch(showError)}><Icon name="spark" size={15}/>Review paper</button>
+            <button className="button button-quiet" disabled={!selectedPath || checkingClaims} onClick={guard(checkDraftClaims)}><Icon name="quote" size={15}/>{checkingClaims ? 'Checking...' : 'Check claims'}</button>
             <button className="button button-quiet submission-button" disabled={!activeWorkspaceId || submissionBusy !== null} onClick={() => openSubmissionDesk().catch(showError)}><Icon name="file" size={15}/>Submit</button>
             <button className="button button-primary" disabled={!selectedPath || !dirty || saving || documentReadOnly} onClick={guard(() => saveDocument())}>{documentReadOnly ? 'Read only' : saving ? 'Saving...' : 'Save'}</button>
           </div>

@@ -225,6 +225,36 @@ export interface EvidenceMapMeta {
   passageCount: number;
 }
 
+export type ClaimCheckVerdict =
+  | 'likely_supported'
+  | 'weak_source_match'
+  | 'citation_warning'
+  | 'citation_error'
+  | 'no_candidate_evidence'
+  | 'no_evidence_available';
+
+export interface ClaimCheckMeta {
+  version: 1;
+  id: string;
+  documentPath: string;
+  generatedAt: string;
+  artifactPaths: {
+    json: string;
+    markdown: string;
+  };
+  evidenceMapIds: string[];
+  citationCheckGeneratedAt?: string;
+  truncated: boolean;
+  summary: Record<ClaimCheckVerdict, number> & {
+    claims: number;
+    ok: number;
+    warnings: number;
+    errors: number;
+  };
+  warnings: string[];
+  findingCount: number;
+}
+
 export interface RevisionPreview {
   path: string;
   instruction: string;

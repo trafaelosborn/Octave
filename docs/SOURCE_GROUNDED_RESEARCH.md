@@ -53,6 +53,22 @@ The JSON keeps:
 
 The Markdown version is for human reading and annotation. The goal is to make source-grounded work reusable: a later draft checker can compare claims against the evidence map instead of asking a model to rediscover the same source shelf from scratch.
 
+## Claim checks
+
+Once evidence maps exist, choose **Check claims** from the top bar or **Check draft claims** in the Sources rail. Octave reads the active draft, extracts substantive paragraphs as candidate claims, and compares them against:
+
+- saved evidence-map passages;
+- the latest citation-check report, when formal citation evidence exists.
+
+The result is saved as:
+
+```text
+.octave/claim-checks/<id>.json
+.octave/claim-checks/<id>.md
+```
+
+Findings are grouped as likely supported, weak source match, citation warning, citation error, no candidate evidence, or no evidence available. Like citation checks, claim checks are lexical review queues rather than final entailment judgments.
+
 ## Why this matters
 
 Citation auditing catches bibliography-level failures: nonexistent keys, unavailable originals, and claims that do not map cleanly onto retrieved citation text.
@@ -69,4 +85,4 @@ Source-grounded research is broader. It turns a local folder into a working evid
 ## Next improvements
 
 - Add passage-level review actions: "accept as evidence," "reject," and "needs manual lookup."
-- Connect citation checks and source briefs so paper claims can be compared against both formal citations and informal source folders.
+- Add model-assisted adjudication for borderline claim-check findings while preserving the deterministic report as the audit trail.

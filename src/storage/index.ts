@@ -1,4 +1,5 @@
 export * from './chat-storage.js';
+export * from './claim-check-storage.js';
 export * from './citation-storage.js';
 export * from './evidence-map-storage.js';
 export * from './review-storage.js';

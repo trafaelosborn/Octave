@@ -1,5 +1,6 @@
 import type {
   ChatSessionMeta,
+  ClaimCheckMeta,
   CitationScan,
   EvidenceMapMeta,
   OctaveFile,
@@ -47,10 +48,12 @@ export function WorkspaceRail({
   citations,
   sources,
   evidenceMaps,
+  claimChecks,
   syncingCitations,
   checkingCitations,
   syncingSources,
   creatingEvidenceMap,
+  checkingClaims,
   newDocumentPath,
   onClose,
   onRailView,
@@ -85,6 +88,8 @@ export function WorkspaceRail({
   onBuildSourceBrief,
   onCreateEvidenceMap,
   onOpenEvidenceMap,
+  onCheckClaims,
+  onOpenClaimCheck,
   onSetSourceRole,
   onNewDocumentPath,
   onCreateDocument,
@@ -111,10 +116,12 @@ export function WorkspaceRail({
   citations: CitationScan | null;
   sources: SourceInventory | null;
   evidenceMaps: EvidenceMapMeta[];
+  claimChecks: ClaimCheckMeta[];
   syncingCitations: boolean;
   checkingCitations: boolean;
   syncingSources: boolean;
   creatingEvidenceMap: boolean;
+  checkingClaims: boolean;
   newDocumentPath: string;
   onClose: () => void;
   onRailView: (view: RailView) => void;
@@ -149,6 +156,8 @@ export function WorkspaceRail({
   onBuildSourceBrief: () => void;
   onCreateEvidenceMap: () => void;
   onOpenEvidenceMap: (path: string) => void;
+  onCheckClaims: () => void;
+  onOpenClaimCheck: (path: string) => void;
   onSetSourceRole: (path: string, role: SourceRole) => void;
   onNewDocumentPath: (value: string) => void;
   onCreateDocument: () => void;
@@ -260,6 +269,7 @@ export function WorkspaceRail({
                   <div className="source-action-stack">
                     <button className="button button-secondary full-width" onClick={onBuildSourceBrief} disabled={sources.items.length === 0}>Build source brief</button>
                     <button className="button button-secondary full-width" onClick={onCreateEvidenceMap} disabled={sources.items.length === 0 || creatingEvidenceMap}>{creatingEvidenceMap ? 'Mapping evidence...' : 'Create evidence map'}</button>
+                    <button className="button button-secondary full-width" onClick={onCheckClaims} disabled={checkingClaims}>{checkingClaims ? 'Checking claims...' : 'Check draft claims'}</button>
                   </div>
                   {!sources.sourceRootsPresent && (
                     <p className="citation-setup-note">Create a <code>sources/</code> folder, then add PDFs, documents, notes, spreadsheets, or images. Octave will inventory them here.</p>
@@ -279,6 +289,19 @@ export function WorkspaceRail({
                       </article>
                     ))}
                     {evidenceMaps.length === 0 && <RailEmpty text="Create an evidence map to save reusable source passages as JSON and Markdown." />}
+                  </div>
+                  <p className="rail-label">Claim checks</p>
+                  <div className="claim-check-list">
+                    {claimChecks.map((report) => (
+                      <article className={`claim-check-card ${report.summary.errors > 0 ? 'has-errors' : report.summary.warnings > 0 ? 'has-warnings' : ''}`} key={report.id}>
+                        <button onClick={() => onOpenClaimCheck(report.artifactPaths.markdown)}>
+                          <span>{report.documentPath}</span>
+                          <small>{report.summary.ok}/{report.summary.claims} ok · {report.summary.warnings} warnings · {report.summary.errors} errors · {timeAgo(report.generatedAt)}</small>
+                        </button>
+                        <button className="text-button" onClick={() => onOpenClaimCheck(report.artifactPaths.json)}>JSON</button>
+                      </article>
+                    ))}
+                    {claimChecks.length === 0 && <RailEmpty text="Run a claim check to compare the active draft against saved evidence maps and citation reports." />}
                   </div>
                   <div className="source-list">
                     {sources.items.map((source) => (
