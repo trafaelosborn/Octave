@@ -194,6 +194,37 @@ export interface SourceInventory {
   summary: Record<SourceRole, number> & { total: number; manual: number };
 }
 
+export interface EvidenceMapMeta {
+  version: 1;
+  id: string;
+  title: string;
+  question: string;
+  createdAt: string;
+  updatedAt: string;
+  artifactPaths: {
+    json: string;
+    markdown: string;
+  };
+  inventory: {
+    generatedAt: string;
+    path: string;
+    sourceCount: number;
+    summary: SourceInventory['summary'];
+  };
+  sources: Array<{
+    path: string;
+    role: SourceRole;
+    roleSource: 'inferred' | 'manual';
+    tags: string[];
+    name: string;
+    extension: string;
+    size: number;
+    mtimeMs: number;
+  }>;
+  warnings: string[];
+  passageCount: number;
+}
+
 export interface RevisionPreview {
   path: string;
   instruction: string;

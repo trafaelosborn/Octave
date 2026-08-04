@@ -19,8 +19,9 @@ Octave should help separate three things:
 3. Open the **Sources** rail.
 4. Choose **Save inventory** to write `.octave/source-inventory.json`.
 5. Correct inferred source types when needed: primary, secondary, archive/data, or unknown.
-6. Choose **Build source brief** to start a project-scoped chat with the inventory and up to eight source files attached.
-7. Ask for exact file paths, page cues, quoted or paraphrased evidence, and a missing-source list.
+6. Choose **Create evidence map** to save a paired JSON/Markdown source-passage map under `.octave/evidence-maps/`.
+7. Choose **Build source brief** to start a project-scoped chat with the inventory and up to eight source files attached.
+8. Ask for exact file paths, page cues, quoted or paraphrased evidence, and a missing-source list.
 
 The built-in **Source brief** prompt asks Octave to:
 
@@ -32,6 +33,25 @@ The built-in **Source brief** prompt asks Octave to:
 - suggest specific missing sources to add next.
 
 The inventory scans files under source-like folders including `sources/`, `source/`, `primary/`, `secondary/`, `archive/`, `archives/`, `data/`, and `datasets/`. Manual role corrections are preserved across rescans.
+
+## Evidence maps
+
+Evidence maps are durable review artifacts, not finished arguments. Octave extracts bounded candidate passages from the source inventory and writes:
+
+```text
+.octave/evidence-maps/<id>.json
+.octave/evidence-maps/<id>.md
+```
+
+The JSON keeps:
+
+- the research question or topic;
+- the source-inventory snapshot;
+- source paths, roles, tags, sizes, and modification times;
+- candidate passages with source path, role, locator, and extraction warnings;
+- empty review fields for direct support, inference notes, and missing sources.
+
+The Markdown version is for human reading and annotation. The goal is to make source-grounded work reusable: a later draft checker can compare claims against the evidence map instead of asking a model to rediscover the same source shelf from scratch.
 
 ## Why this matters
 
@@ -48,6 +68,5 @@ Source-grounded research is broader. It turns a local folder into a working evid
 
 ## Next improvements
 
-- Let source briefs save a machine-readable evidence map under `.octave/`.
 - Add passage-level review actions: "accept as evidence," "reject," and "needs manual lookup."
 - Connect citation checks and source briefs so paper claims can be compared against both formal citations and informal source folders.

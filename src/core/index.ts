@@ -7,6 +7,7 @@ export * from './citation-evidence.js';
 export * from './citation-check.js';
 export * from './compile.js';
 export * from './context.js';
+export * from './evidence-map.js';
 export * from './extract.js';
 export * from './path.js';
 export * from './review.js';

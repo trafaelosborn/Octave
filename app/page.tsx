@@ -18,6 +18,7 @@ import type {
   CitationScan,
   DesktopProviderSettings,
   DesktopProviderSettingsInput,
+  EvidenceMapMeta,
   OctaveFile,
   OutlineItem,
   ProviderStatus,
@@ -98,6 +99,7 @@ export default function OctavePage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [citations, setCitations] = useState<CitationScan | null>(null);
   const [sources, setSources] = useState<SourceInventory | null>(null);
+  const [evidenceMaps, setEvidenceMaps] = useState<EvidenceMapMeta[]>([]);
   const [error, setError] = useState('');
   const [booting, setBooting] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -111,6 +113,7 @@ export default function OctavePage() {
   const [syncingCitations, setSyncingCitations] = useState(false);
   const [checkingCitations, setCheckingCitations] = useState(false);
   const [syncingSources, setSyncingSources] = useState(false);
+  const [creatingEvidenceMap, setCreatingEvidenceMap] = useState(false);
   const [desktopProviderSettings, setDesktopProviderSettings] = useState<DesktopProviderSettings | null>(null);
   const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [savingProviderSettings, setSavingProviderSettings] = useState(false);
@@ -192,14 +195,16 @@ export default function OctavePage() {
     setSubmissionPreflight(null);
     setSubmissionPackages([]);
     setSources(null);
+    setEvidenceMaps([]);
 
-    const [fileData, contextData, chatData, reviewData, citationData, sourceData] = await Promise.all([
+    const [fileData, contextData, chatData, reviewData, citationData, sourceData, evidenceMapData] = await Promise.all([
       apiJson<{ files: OctaveFile[]; workspace: Workspace }>(`/api/files?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ pinnedPaths: string[] }>(`/api/context?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ chats: ChatSessionMeta[] }>(`/api/chats?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<{ reviews: ReviewMemoMeta[] }>(`/api/reviews?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<CitationScan>(`/api/citations?workspaceId=${encodeURIComponent(workspaceId)}`),
       apiJson<SourceInventory>(`/api/sources?workspaceId=${encodeURIComponent(workspaceId)}`),
+      apiJson<{ maps: EvidenceMapMeta[] }>(`/api/evidence-maps?workspaceId=${encodeURIComponent(workspaceId)}`),
     ]);
     setFiles(fileData.files);
     setPinnedPaths(contextData.pinnedPaths);
@@ -207,6 +212,7 @@ export default function OctavePage() {
     setReviews(reviewData.reviews);
     setCitations(citationData);
     setSources(sourceData);
+    setEvidenceMaps(evidenceMapData.maps);
 
     const workspace = knownWorkspaces.find((candidate) => candidate.id === workspaceId) ?? fileData.workspace;
     const paths = new Set(fileData.files.map((file) => file.path));
@@ -330,6 +336,7 @@ export default function OctavePage() {
         setActiveReview(null);
         setAttachmentPaths([]);
         setSources(null);
+        setEvidenceMaps([]);
         setWorkspaceFormOpen(true);
       }
     }
@@ -522,6 +529,33 @@ export default function OctavePage() {
       setError('');
     } finally {
       setSyncingSources(false);
+    }
+  }
+
+  async function refreshEvidenceMaps(): Promise<void> {
+    if (!activeWorkspaceId) return;
+    const data = await apiJson<{ maps: EvidenceMapMeta[] }>(`/api/evidence-maps?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+    setEvidenceMaps(data.maps);
+  }
+
+  async function createEvidenceMap(): Promise<void> {
+    if (!activeWorkspaceId || creatingEvidenceMap) return;
+    const question = window.prompt('Evidence map question or topic', selectedPath ? `Evidence for ${selectedPath}` : 'Source-grounded evidence map')?.trim();
+    if (question === undefined) return;
+    setCreatingEvidenceMap(true);
+    try {
+      const data = await apiJson<{ map: { artifactPaths: { markdown: string } }; maps: EvidenceMapMeta[] }>('/api/evidence-maps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: activeWorkspaceId, question, title: question || undefined }),
+      });
+      setEvidenceMaps(data.maps);
+      await refreshFiles();
+      await loadDocument(data.map.artifactPaths.markdown);
+      setRailView('sources');
+      setError('');
+    } finally {
+      setCreatingEvidenceMap(false);
     }
   }
 
@@ -960,9 +994,11 @@ export default function OctavePage() {
         outline={outline}
         citations={citations}
         sources={sources}
+        evidenceMaps={evidenceMaps}
         syncingCitations={syncingCitations}
         checkingCitations={checkingCitations}
         syncingSources={syncingSources}
+        creatingEvidenceMap={creatingEvidenceMap}
         newDocumentPath={newDocumentPath}
         onClose={() => setRailOpen(false)}
         onRailView={setRailView}
@@ -995,6 +1031,8 @@ export default function OctavePage() {
         onSyncSources={guard(syncSources)}
         onOpenSourceFile={(path) => loadDocument(path).catch(showError)}
         onBuildSourceBrief={guard(buildSourceBrief)}
+        onCreateEvidenceMap={guard(createEvidenceMap)}
+        onOpenEvidenceMap={(path) => loadDocument(path).catch(showError)}
         onSetSourceRole={(path, role) => setSourceRole(path, role).catch(showError)}
         onNewDocumentPath={setNewDocumentPath}
         onCreateDocument={guard(createDocument)}

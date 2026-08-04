@@ -1,6 +1,7 @@
 import type {
   ChatSessionMeta,
   CitationScan,
+  EvidenceMapMeta,
   OctaveFile,
   OutlineItem,
   RailView,
@@ -45,9 +46,11 @@ export function WorkspaceRail({
   outline,
   citations,
   sources,
+  evidenceMaps,
   syncingCitations,
   checkingCitations,
   syncingSources,
+  creatingEvidenceMap,
   newDocumentPath,
   onClose,
   onRailView,
@@ -80,6 +83,8 @@ export function WorkspaceRail({
   onSyncSources,
   onOpenSourceFile,
   onBuildSourceBrief,
+  onCreateEvidenceMap,
+  onOpenEvidenceMap,
   onSetSourceRole,
   onNewDocumentPath,
   onCreateDocument,
@@ -105,9 +110,11 @@ export function WorkspaceRail({
   outline: OutlineItem[];
   citations: CitationScan | null;
   sources: SourceInventory | null;
+  evidenceMaps: EvidenceMapMeta[];
   syncingCitations: boolean;
   checkingCitations: boolean;
   syncingSources: boolean;
+  creatingEvidenceMap: boolean;
   newDocumentPath: string;
   onClose: () => void;
   onRailView: (view: RailView) => void;
@@ -140,6 +147,8 @@ export function WorkspaceRail({
   onSyncSources: () => void;
   onOpenSourceFile: (path: string) => void;
   onBuildSourceBrief: () => void;
+  onCreateEvidenceMap: () => void;
+  onOpenEvidenceMap: (path: string) => void;
   onSetSourceRole: (path: string, role: SourceRole) => void;
   onNewDocumentPath: (value: string) => void;
   onCreateDocument: () => void;
@@ -248,13 +257,29 @@ export function WorkspaceRail({
                     <Metric label="Secondary" value={sources.summary.secondary}/>
                     <Metric label="Archive/data" value={sources.summary.dataset_archive}/>
                   </div>
-                  <button className="button button-secondary full-width" onClick={onBuildSourceBrief} disabled={sources.items.length === 0}>Build source brief</button>
+                  <div className="source-action-stack">
+                    <button className="button button-secondary full-width" onClick={onBuildSourceBrief} disabled={sources.items.length === 0}>Build source brief</button>
+                    <button className="button button-secondary full-width" onClick={onCreateEvidenceMap} disabled={sources.items.length === 0 || creatingEvidenceMap}>{creatingEvidenceMap ? 'Mapping evidence...' : 'Create evidence map'}</button>
+                  </div>
                   {!sources.sourceRootsPresent && (
                     <p className="citation-setup-note">Create a <code>sources/</code> folder, then add PDFs, documents, notes, spreadsheets, or images. Octave will inventory them here.</p>
                   )}
                   {sources.items.length > 0 && (
                     <button className="text-button" onClick={() => onOpenSourceFile(sources.inventoryPath)}>Open machine-readable inventory</button>
                   )}
+                  <p className="rail-label">Evidence maps</p>
+                  <div className="evidence-map-list">
+                    {evidenceMaps.map((map) => (
+                      <article className="evidence-map-card" key={map.id}>
+                        <button onClick={() => onOpenEvidenceMap(map.artifactPaths.markdown)}>
+                          <span>{map.title}</span>
+                          <small>{map.passageCount} passages · {timeAgo(map.createdAt)}</small>
+                        </button>
+                        <button className="text-button" onClick={() => onOpenEvidenceMap(map.artifactPaths.json)}>JSON</button>
+                      </article>
+                    ))}
+                    {evidenceMaps.length === 0 && <RailEmpty text="Create an evidence map to save reusable source passages as JSON and Markdown." />}
+                  </div>
                   <div className="source-list">
                     {sources.items.map((source) => (
                       <article className={`source-card source-role-${source.role}`} key={source.path}>
