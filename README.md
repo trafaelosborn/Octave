@@ -4,6 +4,12 @@ Octave is a local-first research workstation for writing, interrogating, revisin
 
 It began as the research environment inside [Doris](https://github.com/trafaelosborn) and is now an independent application and TypeScript toolkit.
 
+> ## New here? Take the [five-minute tour](docs/QUICK_TOUR.md)
+>
+> Octave combines a local source editor, persistent AI-assisted research conversations, reviewable diff-based revisions, source/evidence checks, and PDF compilation. [See the workflow](docs/QUICK_TOUR.md) or [run the bundled example](#run-the-workstation).
+>
+> ![Octave workflow schematic (not an application screenshot)](docs/assets/workflow.svg)
+
 > **Status:** Active early release. The workstation is usable today, and a Windows-first Electron developer build is available. Signed public installers remain future work.
 
 ## What it does
